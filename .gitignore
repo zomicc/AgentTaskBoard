@@ -5,6 +5,8 @@ board.db*
 .board-spool/
 .board-ack/
 .atb/
+docs/
+*.bak-*
 logs/
 *.log
 .DS_Store

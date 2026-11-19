@@ -6,7 +6,7 @@ One task has one owner. `atb claim` decides that owner with a machine-readable e
 
 ## Status
 
-This repository contains the `v0.1.0` Node.js skeleton. It implements the five commands `init`, `add`, `claim`, `done`, and `list`. It has no web UI, Obsidian dependency, daemon, network service, or cross-machine sync.
+This repository contains the `v0.1.0` Node.js skeleton. It implements `init`, `doctor`, `rules`, `add`, `claim`, `done`, and `list`. It has no web UI, Obsidian dependency, daemon, network service, or cross-machine sync.
 
 ## Requirements
 
@@ -21,6 +21,29 @@ atb --version
 ```
 
 After `atb init` creates a board in a project, `atb doctor` verifies the local runtime, workspace, board, protocol, and lock state before task commands are used.
+
+## Connect your agents
+
+`atb init` does not edit agent rule files. Run `atb rules install --dry-run` to print every target file and line change, then run `atb rules install` and confirm each file individually. In a pipe or other non-TTY session, installation prints the plan and exits `7` without waiting; use `--yes` only after reviewing that plan.
+
+The automatic installer backs up each file as `<name>.bak-<timestamp>`, replaces only the block between `atb:begin` and `atb:end`, and records installed targets in the user data directory. Use `atb rules status` to inspect them and `atb rules uninstall --yes` to remove a block. `atb doctor --rules` checks that a board exists; without `--expect` it prints a challenge and exits `7`. Ask a fresh agent for the rule probe nonce, then run `atb doctor --rules --expect <agent-answer>`; a matching nonce exits `0`.
+
+Manual installation uses the same self-gated block. Add it to the agent rule files you choose and replace `<nonce>` with a random unique value:
+
+```markdown
+<!-- atb:begin protocol:1 -->
+AgentTaskBoard may track tasks in this project.
+- If `.atb/board.json` does not exist in the current working directory, ignore this block entirely.
+- If it exists: `atb list --since <cursor>` before starting, `atb claim <slug> --actor <name>` to take one,
+  `atb done <slug> --actor <name> --evidence-kind commit|path|test --evidence-ref <ref>` to finish.
+- Exit codes are authoritative: 3 = owned by someone else, 4 = no such task, 7 = unconfirmed, 10 = workspace unusable.
+  Never treat a non-zero exit as success.
+- Never edit `.atb/` or any rule file by hand.
+- Rule probe nonce: <nonce>
+<!-- atb:end -->
+```
+
+Manual targets are `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.zcode/AGENTS.md`, `~/.agents/AGENTS.md`, and `$DSH_HOME/AGENTS.md`. Claude Code can load a project `AGENTS.md` through a one-line `CLAUDE.md` containing `@AGENTS.md`.
 
 For development, run the CLI directly:
 
@@ -66,6 +89,10 @@ Every command accepts `--workspace <path>` and defaults to the current directory
 | --- | --- |
 | `atb init` | Creates `.atb/board.json` under the workspace root. Safe to run again. |
 | `atb doctor` | Checks Node.js, workspace writability, board protocol, and residual locks. |
+| `atb rules install` | Previews, confirms, backs up, and installs self-gated agent rules. |
+| `atb rules status` | Reports installed rules, protocol, block hash, and nonce. |
+| `atb rules uninstall` | Removes only the managed rule block and keeps backups. |
+| `atb doctor --rules` | Verifies a board and a nonce returned by a fresh agent. |
 | `atb add` | Adds a task with a goal, workspace reference, deliverables, and stage. |
 | `atb claim` | Claims a task for one actor. A second actor exits with code `3`. |
 | `atb done` | Completes a claimed task for its owner and records evidence. |
@@ -85,7 +112,7 @@ Every command accepts `--workspace <path>` and defaults to the current directory
 | `9` | Duplicate task slug |
 | `10` | Workspace or working directory is missing or not writable |
 
-Detailed field rules are in [docs/DESIGN.md](docs/DESIGN.md) and the machine protocol is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
+Internal design notes are kept out of the public repository.
 
 ## Local State
 

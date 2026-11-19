@@ -6,7 +6,7 @@
 
 ## 狀態
 
-這個倉庫包含 `v0.1.0` 的 Node.js 骨架，實作 `init`、`add`、`claim`、`done`、`list` 五個命令。它沒有 Web 面板、Obsidian 依賴、常駐程序、網路服務或跨機器同步。
+這個倉庫包含 `v0.1.0` 的 Node.js 骨架，實作 `init`、`doctor`、`rules`、`add`、`claim`、`done`、`list`。它沒有 Web 面板、Obsidian 依賴、常駐程序、網路服務或跨機器同步。
 
 ## 需求
 
@@ -21,6 +21,29 @@ atb --version
 ```
 
 在專案中由 `atb init` 建立看板後，`atb doctor` 會在執行任務命令前檢查本機執行環境、工作區、看板、協定與鎖定狀態。
+
+## 接入你的 agent
+
+`atb init` 不會修改 agent 規則檔。先執行 `atb rules install --dry-run` 查看每個目標檔案與行數變化，再執行 `atb rules install` 逐項確認。管線或其他非 TTY 環境會印出計畫並以 `7` 結束，不會等待輸入；確認後才使用 `--yes`。
+
+自動安裝器會先將每個檔案備份為 `<name>.bak-<timestamp>`，只替換 `atb:begin` 與 `atb:end` 之間的區塊，並把已安裝目標記錄在使用者資料目錄。用 `atb rules status` 檢查，`atb rules uninstall --yes` 移除。`atb doctor --rules` 會先確認看板存在；沒有 `--expect` 時印出挑戰並以 `7` 結束。向新的 agent 詢問規則探針 nonce，再執行 `atb doctor --rules --expect <agent-answer>`；相符時以 `0` 結束。
+
+手動安裝使用同一個自門控區塊。將它加入你選擇的 agent 規則檔，並把 `<nonce>` 換成隨機唯一值：
+
+```markdown
+<!-- atb:begin protocol:1 -->
+AgentTaskBoard may track tasks in this project.
+- If `.atb/board.json` does not exist in the current working directory, ignore this block entirely.
+- If it exists: `atb list --since <cursor>` before starting, `atb claim <slug> --actor <name>` to take one,
+  `atb done <slug> --actor <name> --evidence-kind commit|path|test --evidence-ref <ref>` to finish.
+- Exit codes are authoritative: 3 = owned by someone else, 4 = no such task, 7 = unconfirmed, 10 = workspace unusable.
+  Never treat a non-zero exit as success.
+- Never edit `.atb/` or any rule file by hand.
+- Rule probe nonce: <nonce>
+<!-- atb:end -->
+```
+
+手動目標是 `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.zcode/AGENTS.md`、`~/.agents/AGENTS.md` 與 `$DSH_HOME/AGENTS.md`。Claude Code 可透過專案 `CLAUDE.md` 的一行 `@AGENTS.md` 載入專案 `AGENTS.md`。
 
 開發時可直接執行 CLI：
 
@@ -66,6 +89,10 @@ atb done first-task --actor builder --evidence-kind path --evidence-ref "."
 | --- | --- |
 | `atb init` | 在工作區根目錄建立 `.atb/board.json`，可重複執行。 |
 | `atb doctor` | 檢查 Node.js、工作區可寫性、看板協定與殘留鎖定。 |
+| `atb rules install` | 預覽、逐項確認、備份並安裝自門控 agent 規則。 |
+| `atb rules status` | 顯示已安裝規則、協定、區塊雜湊與 nonce。 |
+| `atb rules uninstall` | 只移除管理的規則區塊並保留備份。 |
+| `atb doctor --rules` | 驗證看板與新的 agent 回傳的 nonce。 |
 | `atb add` | 新增含目標、工作區引用、產物與階段的任務。 |
 | `atb claim` | 由一個 actor 認領任務，第二個 actor 會以退出碼 `3` 失敗。 |
 | `atb done` | 由 owner 完成已認領任務並記錄證據。 |
@@ -85,7 +112,7 @@ atb done first-task --actor builder --evidence-kind path --evidence-ref "."
 | `9` | 任務 slug 重複 |
 | `10` | 工作區或工作目錄不存在或不可寫 |
 
-詳細欄位規則見 [docs/DESIGN.md](docs/DESIGN.md)，機器協定見 [docs/PROTOCOL.md](docs/PROTOCOL.md)。
+內部設計筆記不放在公開倉庫。
 
 ## 本機狀態
 
