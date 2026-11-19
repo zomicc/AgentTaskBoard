@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.exe
+board.db*
+.board-spool/
+.board-ack/
+.atb/
+logs/
+*.log
+.DS_Store
+Thumbs.db

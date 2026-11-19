@@ -1,0 +1,15 @@
+{
+  "name": "agenttaskboard",
+  "version": "0.1.0",
+  "description": "A local task board and arbitration CLI for coding agents.",
+  "license": "MIT",
+  "bin": {
+    "atb": "./bin/atb.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}
