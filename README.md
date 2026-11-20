@@ -6,7 +6,7 @@ One task has one owner. `atb claim` decides that owner with a machine-readable e
 
 ## Status
 
-This repository contains the `v0.1.0` Node.js skeleton. It implements `init`, `doctor`, `rules`, `add`, `claim`, `done`, and `list`. It has no web UI, Obsidian dependency, daemon, network service, or cross-machine sync.
+This repository contains the `v0.1.0` Node.js skeleton. It implements `init`, `doctor`, `rules`, `auto`, `add`, `claim`, `done`, and `list`. It has no web UI, Obsidian dependency, daemon, network service, or cross-machine sync.
 
 ## Requirements
 
@@ -28,14 +28,23 @@ After `atb init` creates a board in a project, `atb doctor` verifies the local r
 
 The automatic installer backs up each file as `<name>.bak-<timestamp>`, replaces only the block between `atb:begin` and `atb:end`, and records installed targets in the user data directory. Use `atb rules status` to inspect them and `atb rules uninstall --yes` to remove a block. `atb doctor --rules` checks that a board exists; without `--expect` it prints a challenge and exits `7`. Ask a fresh agent for the rule probe nonce, then run `atb doctor --rules --expect <agent-answer>`; a matching nonce exits `0`.
 
+## Auto mode
+
+Auto mode is opt-in and workspace-local. `atb init --auto` or `atb auto on` enables it; `atb auto off` disables it, and `atb auto status` reports `enabled`, `window_minutes`, `create_allowed`, and `next_check_after`.
+When enabled, `atb claim <slug> --actor <name> --goal "..."` creates an agent-origin task if the slug is absent. With auto off a missing slug exits `4`; with auto on but no goal it exits `5`; an existing task is claimed normally and the supplied goal is ignored. `--no-create` keeps sync on but disables claim-time creation.
+`--window` is a check hint, not a timer: it only changes `next_check_after`, used on the next `atb` call or agent-turn boundary. `atb auto on --window 5m`.
+
 Manual installation uses the same self-gated block. Add it to the agent rule files you choose and replace `<nonce>` with a random unique value:
 
 ```markdown
-<!-- atb:begin protocol:1 -->
+<!-- atb:begin protocol:2 -->
 AgentTaskBoard may track tasks in this project.
 - If `.atb/board.json` does not exist in the current working directory, ignore this block entirely.
-- If it exists: `atb list --since <cursor>` before starting, `atb claim <slug> --actor <name>` to take one,
+- If it exists: run `atb list --since <cursor>` when starting, or when now is later than `next_check_after`.
+  Use `atb claim <slug> --actor <name>` to take one, and
   `atb done <slug> --actor <name> --evidence-kind commit|path|test --evidence-ref <ref>` to finish.
+- If that claim exits 4 while auto mode is enabled, retry with `--goal`; the retry may create an agent task.
+  Deliverable is optional for this claim-time registration, but never treat exit 4 as success.
 - Exit codes are authoritative: 3 = owned by someone else, 4 = no such task, 7 = unconfirmed, 10 = workspace unusable.
   Never treat a non-zero exit as success.
 - Never edit `.atb/` or any rule file by hand.
@@ -81,6 +90,7 @@ Every command accepts `--workspace <path>` and defaults to the current directory
 | `status` | `todo`, `claimed`, or `done` |
 | `owner` | The actor that successfully claimed the task |
 | `outcome` | Result recorded by `atb done` |
+| `origin` | `user` for `atb add`, or `agent` for claim-time registration |
 | `spec_revision` | Task-definition revision, starting at `1` |
 
 ## Commands
@@ -93,10 +103,11 @@ Every command accepts `--workspace <path>` and defaults to the current directory
 | `atb rules status` | Reports installed rules, protocol, block hash, and nonce. |
 | `atb rules uninstall` | Removes only the managed rule block and keeps backups. |
 | `atb doctor --rules` | Verifies a board and a nonce returned by a fresh agent. |
+| `atb auto` | Shows or changes workspace-local automatic claim and sync hints. |
 | `atb add` | Adds a task with a goal, workspace reference, deliverables, and stage. |
-| `atb claim` | Claims a task for one actor. A second actor exits with code `3`. |
+| `atb claim` | Claims a task; auto mode can create it when `--goal` is supplied. |
 | `atb done` | Completes a claimed task for its owner and records evidence. |
-| `atb list` | Shows current tasks and events after an optional `--since` cursor. |
+| `atb list` | Shows tasks and events after `--since`, optionally filtered by `--origin`. |
 
 ## Exit Codes
 
@@ -104,7 +115,7 @@ Every command accepts `--workspace <path>` and defaults to the current directory
 | --- | --- |
 | `0` | Success |
 | `3` | Claim conflict: the task already has another owner or is complete |
-| `4` | Task not found |
+| `4` | Task not found, or auto status requested before `init` |
 | `5` | Invalid command or arguments |
 | `6` | Board is missing, locked, or unavailable |
 | `7` | Completion rejected because the actor is not the owner |

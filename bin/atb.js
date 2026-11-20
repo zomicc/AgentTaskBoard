@@ -10,6 +10,9 @@ const PROTOCOL = 'agenttaskboard-protocol: 1';
 const VERSION = '0.1.0';
 const STATE_DIR = '.atb';
 const BOARD_FILE = 'board.json';
+const CONFIG_FILE = 'config.json';
+const DEFAULT_WINDOW_MINUTES = 5;
+const RULES_PROTOCOL = 'atb:begin protocol:2';
 const RULES_STATE_VERSION = 1;
 const RULE_SCOPES = new Set(['global', 'project', 'both']);
 
@@ -41,9 +44,18 @@ const OPTIONS = new Set([
   'scope',
   'only',
   'expect',
+  'window',
+  'origin',
 ]);
 
-const BOOLEAN_OPTIONS = new Set(['dry-run', 'yes', 'force', 'rules']);
+const BOOLEAN_OPTIONS = new Set([
+  'dry-run',
+  'yes',
+  'force',
+  'rules',
+  'auto',
+  'no-create',
+]);
 
 class CliError extends Error {
   constructor(code, message) {
@@ -56,15 +68,17 @@ function usage() {
   return [
     'Usage:',
     '  atb init [--workspace <path>]',
+    '  atb init --auto [--window <duration>] [--no-create] [--workspace <path>]',
     '  atb doctor [--workspace <path>]',
     '  atb doctor --rules [--workspace <path>] [--expect <answer>]',
     '  atb rules install [--scope global|project|both] [--dry-run] [--yes]',
     '  atb rules status [--scope global|project|both] [--workspace <path>]',
     '  atb rules uninstall [--scope global|project|both] [--dry-run] [--yes]',
+    '  atb auto on|off|status [--window <duration>] [--no-create] [--workspace <path>]',
     '  atb add --slug <slug> --goal <text> --deliverable <path> [options]',
-    '  atb claim <task-id-or-slug> --actor <name> [--workspace <path>]',
+    '  atb claim <task-id-or-slug> --actor <name> [--goal <text>] [--deliverable <path>] [--workspace <path>]',
     '  atb done <task-id-or-slug> --actor <name> --evidence-kind <kind> --evidence-ref <ref>',
-    '  atb list [--since <seq>] [--workspace <path>]',
+    '  atb list [--since <seq>] [--origin user|agent] [--workspace <path>]',
     '  atb --version',
     '',
     'Common options:',
@@ -74,6 +88,9 @@ function usage() {
     '  --stage <name>           Task stage (default: design)',
     '  --scope <scope>          Rule targets: global, project, or both',
     '  --only <name>            Limit rules to one or more named targets',
+    '  --window <duration>      Auto check interval (default: 5m; not a timer)',
+    '  --no-create              In auto mode, never create tasks during claim',
+    '  --origin <origin>        Filter list results by user or agent',
     '  --dry-run                Print the change plan without writing',
     '  --yes                    Apply every selected rule change without prompting',
   ].join('\n');
@@ -164,6 +181,7 @@ function statePaths(workspace) {
   return {
     stateDir,
     boardPath: path.join(stateDir, BOARD_FILE),
+    configPath: path.join(stateDir, CONFIG_FILE),
     lockPath: path.join(stateDir, 'lock'),
   };
 }
@@ -234,6 +252,13 @@ function validateBoard(board, boardPath) {
   ) {
     throw new CliError(EXIT.CORRUPT_STATE, `unsupported or corrupt board: ${boardPath}`);
   }
+  for (const task of board.tasks) {
+    if (task.origin === undefined) {
+      task.origin = 'user';
+    } else if (task.origin !== 'user' && task.origin !== 'agent') {
+      throw new CliError(EXIT.CORRUPT_STATE, `unsupported task origin: ${task.origin}`);
+    }
+  }
   return board;
 }
 
@@ -254,6 +279,90 @@ function writeBoard(boardPath, board) {
   } catch (error) {
     throw new CliError(EXIT.UNWRITABLE, `cannot write board: ${error.message}`);
   }
+}
+
+function defaultAutoConfig() {
+  return {
+    auto: {
+      enabled: false,
+      window_minutes: DEFAULT_WINDOW_MINUTES,
+      create_allowed: true,
+      updated_ts: null,
+    },
+  };
+}
+
+function readAutoConfig(configPath) {
+  if (!fs.existsSync(configPath)) {
+    return defaultAutoConfig();
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const auto = parsed && parsed.auto;
+    if (
+      !auto ||
+      typeof auto.enabled !== 'boolean' ||
+      !Number.isInteger(auto.window_minutes) ||
+      auto.window_minutes <= 0 ||
+      typeof auto.create_allowed !== 'boolean'
+    ) {
+      throw new Error('invalid auto configuration');
+    }
+    return {
+      auto: {
+        enabled: auto.enabled,
+        window_minutes: auto.window_minutes,
+        create_allowed: auto.create_allowed,
+        updated_ts: typeof auto.updated_ts === 'string' ? auto.updated_ts : null,
+      },
+    };
+  } catch (error) {
+    if (error instanceof CliError) {
+      throw error;
+    }
+    throw new CliError(EXIT.CORRUPT_STATE, `cannot read auto configuration: ${error.message}`);
+  }
+}
+
+function writeAutoConfig(configPath, config) {
+  try {
+    fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  } catch (error) {
+    throw new CliError(EXIT.UNWRITABLE, `cannot write auto configuration: ${error.message}`);
+  }
+}
+
+function parseWindow(value) {
+  if (value === undefined) {
+    return DEFAULT_WINDOW_MINUTES;
+  }
+  const match = /^(\d+)(m|h)$/i.exec(String(value).trim());
+  if (!match) {
+    throw new CliError(EXIT.INVALID, '--window must be a positive duration such as 5m or 1h');
+  }
+  const amount = Number(match[1]);
+  const minutes = match[2].toLowerCase() === 'h' ? amount * 60 : amount;
+  if (!Number.isInteger(minutes) || minutes <= 0 || minutes > 1440) {
+    throw new CliError(EXIT.INVALID, '--window must be between 1 minute and 24 hours');
+  }
+  return minutes;
+}
+
+function autoNextCheck(config, now = Date.now()) {
+  const auto = config.auto;
+  if (!auto.enabled) {
+    return null;
+  }
+  return new Date(now + auto.window_minutes * 60_000).toISOString();
+}
+
+function autoSnapshot(config) {
+  return {
+    enabled: config.auto.enabled,
+    window_minutes: config.auto.window_minutes,
+    create_allowed: config.auto.create_allowed,
+    next_check_after: autoNextCheck(config),
+  };
 }
 
 function withBoard(workspace, callback) {
@@ -577,11 +686,14 @@ function inspectRuleTarget(target, workspace, state) {
 
 function renderRuleBlock(nonce, eol = os.EOL) {
   return [
-    '<!-- atb:begin protocol:1 -->',
+    `<!-- ${RULES_PROTOCOL} -->`,
     'AgentTaskBoard may track tasks in this project.',
     '- If `.atb/board.json` does not exist in the current working directory, ignore this block entirely.',
-    '- If it exists: `atb list --since <cursor>` before starting, `atb claim <slug> --actor <name>` to take one,',
+    '- If it exists: run `atb list --since <cursor>` when starting, or when now is later than `next_check_after`.',
+    '  Use `atb claim <slug> --actor <name>` to take one, and',
     '  `atb done <slug> --actor <name> --evidence-kind commit|path|test --evidence-ref <ref>` to finish.',
+    '- If that claim exits 4 while auto mode is enabled, retry with `--goal`; the retry may create an agent task.',
+    '  Deliverable is optional for this claim-time registration, but never treat exit 4 as success.',
     '- Exit codes are authoritative: 3 = owned by someone else, 4 = no such task, 7 = unconfirmed, 10 = workspace unusable.',
     '  Never treat a non-zero exit as success.',
     '- Never edit `.atb/` or any rule file by hand.',
@@ -1195,6 +1307,54 @@ function commandDoctorRules(options, positionals = []) {
   };
 }
 
+function configureAuto(configPath, enabled, options = {}) {
+  const config = readAutoConfig(configPath);
+  const now = new Date().toISOString();
+  config.auto.enabled = enabled;
+  if (options.window !== undefined) {
+    config.auto.window_minutes = parseWindow(options.window);
+  }
+  if (enabled) {
+    config.auto.create_allowed = !options['no-create'];
+  }
+  config.auto.updated_ts = now;
+  writeAutoConfig(configPath, config);
+  return config;
+}
+
+function commandAuto(options, positionals) {
+  if (positionals.length !== 1 || !['on', 'off', 'status'].includes(positionals[0])) {
+    throw new CliError(EXIT.INVALID, 'auto requires one of: on, off, status');
+  }
+  const action = positionals[0];
+  const workspace = resolveWorkspace(options.workspace);
+  const paths = statePaths(workspace);
+  if (action === 'status' && !fs.existsSync(paths.boardPath)) {
+    throw new CliError(EXIT.NOT_FOUND, `board is not initialized in ${workspace}; run "atb init"`);
+  }
+
+  return withBoard(workspace, () => {
+    if (action === 'status') {
+      const config = readAutoConfig(paths.configPath);
+      return {
+        ok: true,
+        command: 'auto status',
+        board_initialized: true,
+        auto: autoSnapshot(config),
+        exit_code: EXIT.OK,
+      };
+    }
+    const config = configureAuto(paths.configPath, action === 'on', options);
+    return {
+      ok: true,
+      command: `auto ${action}`,
+      board_initialized: true,
+      auto: autoSnapshot(config),
+      exit_code: EXIT.OK,
+    };
+  });
+}
+
 function commandInit(options, positionals) {
   if (positionals.length !== 0 || options.deliverable.length !== 0) {
     throw new CliError(EXIT.INVALID, 'init does not take positional arguments');
@@ -1215,6 +1375,9 @@ function commandInit(options, positionals) {
     } else {
       writeBoard(paths.boardPath, emptyBoard());
     }
+    if (options.auto) {
+      configureAuto(paths.configPath, true, options);
+    }
   } finally {
     release();
   }
@@ -1225,6 +1388,7 @@ function commandInit(options, positionals) {
     board: paths.boardPath,
     protocol: PROTOCOL,
     rules_hint: 'run "atb rules install" to connect your agents',
+    ...(options.auto ? { auto: autoSnapshot(readAutoConfig(paths.configPath)) } : {}),
   };
 }
 
@@ -1309,6 +1473,21 @@ function commandDoctor(options, positionals) {
       error: error instanceof Error ? error.message : String(error),
     };
   }
+  let autoSummary;
+  try {
+    const config = readAutoConfig(paths.configPath);
+    autoSummary = {
+      ...autoSnapshot(config),
+      origins: {
+        user: board.tasks.filter((task) => task.origin === 'user').length,
+        agent: board.tasks.filter((task) => task.origin === 'agent').length,
+      },
+    };
+  } catch (error) {
+    autoSummary = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
   return {
     ok: true,
     version: VERSION,
@@ -1337,6 +1516,7 @@ function commandDoctor(options, positionals) {
       lock_clear: true,
     },
     rules: rulesSummary,
+    auto: autoSummary,
   };
 }
 
@@ -1377,6 +1557,7 @@ function commandAdd(options, positionals) {
       outcome: null,
       evidence_kind: null,
       evidence_ref: null,
+      origin: 'user',
       spec_revision: 1,
       created_ts: now,
       updated_ts: now,
@@ -1394,11 +1575,62 @@ function commandClaim(options, positionals) {
   }
   const workspace = resolveWorkspace(options.workspace);
   const actor = requireValue(options.actor, 'actor');
+  const reference = positionals[0];
 
   return withBoard(workspace, (board, boardPath) => {
-    const task = findTask(board, positionals[0]);
+    const paths = statePaths(workspace);
+    const config = readAutoConfig(paths.configPath);
+    let task = board.tasks.find((item) => item.id === reference || item.slug === reference);
+    let created = false;
+    let createdSeq = null;
+    if (!task) {
+      if (!config.auto.enabled || !config.auto.create_allowed) {
+        throw new CliError(EXIT.NOT_FOUND, `task not found: ${reference}`);
+      }
+      const goal = requireValue(options.goal, 'goal');
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(reference)) {
+        throw new CliError(
+          EXIT.INVALID,
+          '--slug may contain only letters, numbers, ".", "_" and "-"',
+        );
+      }
+      const deliverables = options.deliverable.map((item) => requireValue(item, 'deliverable'));
+      const now = new Date().toISOString();
+      task = {
+        id: crypto.randomUUID(),
+        slug: reference,
+        project: options.project ? requireValue(options.project, 'project') : 'default',
+        goal,
+        workspace_ref: workspace,
+        working_subdir: options['working-subdir'] || '',
+        deliverables,
+        stage: options.stage ? requireValue(options.stage, 'stage') : 'design',
+        status: 'todo',
+        owner: null,
+        outcome: null,
+        evidence_kind: null,
+        evidence_ref: null,
+        origin: 'agent',
+        spec_revision: 1,
+        created_ts: now,
+        updated_ts: now,
+      };
+      board.tasks.push(task);
+      createdSeq = appendEvent(board, task, 'added', {
+        actor,
+        origin: 'agent',
+        goal,
+      });
+      created = true;
+    }
     if (task.status === 'claimed' && task.owner === actor) {
-      return { ok: true, claimed: false, task };
+      return {
+        ok: true,
+        claimed: false,
+        created,
+        task,
+        ...(config.auto.enabled ? { auto: autoSnapshot(config) } : {}),
+      };
     }
     if (task.status !== 'todo') {
       throw new CliError(
@@ -1414,7 +1646,16 @@ function commandClaim(options, positionals) {
     task.updated_ts = now;
     const seq = appendEvent(board, task, 'claimed', { actor, run_cwd: runCwd });
     writeBoard(boardPath, board);
-    return { ok: true, claimed: true, seq, run_cwd: runCwd, task };
+    return {
+      ok: true,
+      claimed: true,
+      created,
+      ...(createdSeq === null ? {} : { created_seq: createdSeq }),
+      seq,
+      run_cwd: runCwd,
+      task,
+      ...(config.auto.enabled ? { auto: autoSnapshot(config) } : {}),
+    };
   });
 }
 
@@ -1475,24 +1716,33 @@ function commandList(options, positionals) {
   }
   const workspace = resolveWorkspace(options.workspace);
   const since = parseSince(options.since);
+  const origin = options.origin;
+  if (origin !== undefined && origin !== 'user' && origin !== 'agent') {
+    throw new CliError(EXIT.INVALID, '--origin must be user or agent');
+  }
 
   return withBoard(workspace, (board) => {
     const tasksById = new Map(board.tasks.map((task) => [task.id, task]));
+    const tasks = board.tasks.filter((task) => origin === undefined || task.origin === origin);
+    const taskIds = new Set(tasks.map((task) => task.id));
     const items = board.events
-      .filter((event) => event.seq > since)
+      .filter((event) => event.seq > since && taskIds.has(event.task_id))
       .map((event) => ({
         ...event,
         task: tasksById.get(event.task_id) || null,
       }));
     const nextCursor =
       items.length > 0 ? items[items.length - 1].seq : since;
+    const paths = statePaths(workspace);
+    const config = readAutoConfig(paths.configPath);
     return {
       ok: true,
       protocol: PROTOCOL,
       items,
-      tasks: board.tasks,
+      tasks,
       next_cursor: nextCursor,
       has_more: false,
+      auto: autoSnapshot(config),
     };
   });
 }
@@ -1524,6 +1774,11 @@ function run(argv) {
     }
     case 'rules': {
       const result = commandRules(parsed.options, parsed.positionals);
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      return result.exit_code;
+    }
+    case 'auto': {
+      const result = commandAuto(parsed.options, parsed.positionals);
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       return result.exit_code;
     }

@@ -6,7 +6,7 @@
 
 ## 狀態
 
-這個倉庫包含 `v0.1.0` 的 Node.js 骨架，實作 `init`、`doctor`、`rules`、`add`、`claim`、`done`、`list`。它沒有 Web 面板、Obsidian 依賴、常駐程序、網路服務或跨機器同步。
+這個倉庫包含 `v0.1.0` 的 Node.js 骨架，實作 `init`、`doctor`、`rules`、`auto`、`add`、`claim`、`done`、`list`。它沒有 Web 面板、Obsidian 依賴、常駐程序、網路服務或跨機器同步。
 
 ## 需求
 
@@ -28,14 +28,23 @@ atb --version
 
 自動安裝器會先將每個檔案備份為 `<name>.bak-<timestamp>`，只替換 `atb:begin` 與 `atb:end` 之間的區塊，並把已安裝目標記錄在使用者資料目錄。用 `atb rules status` 檢查，`atb rules uninstall --yes` 移除。`atb doctor --rules` 會先確認看板存在；沒有 `--expect` 時印出挑戰並以 `7` 結束。向新的 agent 詢問規則探針 nonce，再執行 `atb doctor --rules --expect <agent-answer>`；相符時以 `0` 結束。
 
+## 自動模式
+
+自動模式是選擇性啟用且只屬於目前工作區。`atb init --auto` 或 `atb auto on` 啟用，`atb auto off` 停用，`atb auto status` 顯示 `enabled`、`window_minutes`、`create_allowed` 與 `next_check_after`。
+啟用後，`atb claim <slug> --actor <name> --goal "..."` 會在 slug 不存在時建立 agent 來源任務。自動模式關閉時，缺少任務會以 `4` 結束；開啟但沒給 goal 會以 `5` 結束；任務已存在時照常認領，並忽略這次傳入的 goal。`--no-create` 保留同步提示但停用認領時建卡。
+`--window` 只是下次檢查的提示，不是定時器：它只影響 `next_check_after`，並在下一次 `atb` 呼叫或代理回合邊界使用。範例：`atb auto on --window 5m`。
+
 手動安裝使用同一個自門控區塊。將它加入你選擇的 agent 規則檔，並把 `<nonce>` 換成隨機唯一值：
 
 ```markdown
-<!-- atb:begin protocol:1 -->
+<!-- atb:begin protocol:2 -->
 AgentTaskBoard may track tasks in this project.
 - If `.atb/board.json` does not exist in the current working directory, ignore this block entirely.
-- If it exists: `atb list --since <cursor>` before starting, `atb claim <slug> --actor <name>` to take one,
+- If it exists: run `atb list --since <cursor>` when starting, or when now is later than `next_check_after`.
+  Use `atb claim <slug> --actor <name>` to take one, and
   `atb done <slug> --actor <name> --evidence-kind commit|path|test --evidence-ref <ref>` to finish.
+- If that claim exits 4 while auto mode is enabled, retry with `--goal`; the retry may create an agent task.
+  Deliverable is optional for this claim-time registration, but never treat exit 4 as success.
 - Exit codes are authoritative: 3 = owned by someone else, 4 = no such task, 7 = unconfirmed, 10 = workspace unusable.
   Never treat a non-zero exit as success.
 - Never edit `.atb/` or any rule file by hand.
@@ -81,6 +90,7 @@ atb done first-task --actor builder --evidence-kind path --evidence-ref "."
 | `status` | `todo`、`claimed` 或 `done` |
 | `owner` | 成功認領任務的 actor |
 | `outcome` | `atb done` 記錄的結果 |
+| `origin` | `atb add` 為 `user`，認領時自動建立為 `agent` |
 | `spec_revision` | 任務定義版本，從 `1` 開始 |
 
 ## 命令
@@ -93,10 +103,11 @@ atb done first-task --actor builder --evidence-kind path --evidence-ref "."
 | `atb rules status` | 顯示已安裝規則、協定、區塊雜湊與 nonce。 |
 | `atb rules uninstall` | 只移除管理的規則區塊並保留備份。 |
 | `atb doctor --rules` | 驗證看板與新的 agent 回傳的 nonce。 |
+| `atb auto` | 顯示或變更工作區層級的自動認領與同步提示。 |
 | `atb add` | 新增含目標、工作區引用、產物與階段的任務。 |
-| `atb claim` | 由一個 actor 認領任務，第二個 actor 會以退出碼 `3` 失敗。 |
+| `atb claim` | 認領任務；自動模式可在提供 `--goal` 時建立任務。 |
 | `atb done` | 由 owner 完成已認領任務並記錄證據。 |
-| `atb list` | 顯示目前任務，以及 `--since` 游標之後的事件。 |
+| `atb list` | 顯示 `--since` 之後的任務與事件，可用 `--origin` 篩選。 |
 
 ## 退出碼
 
@@ -104,7 +115,7 @@ atb done first-task --actor builder --evidence-kind path --evidence-ref "."
 | --- | --- |
 | `0` | 成功 |
 | `3` | 認領衝突：任務已有其他 owner 或已完成 |
-| `4` | 找不到任務 |
+| `4` | 找不到任務，或在 `init` 前查詢自動狀態 |
 | `5` | 命令或參數無效 |
 | `6` | 看板不存在、被鎖定或無法使用 |
 | `7` | 完成操作被拒，因為 actor 不是 owner |
