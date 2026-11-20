@@ -8,7 +8,7 @@ One task has one owner. `atb claim` decides that owner with a machine-readable e
 
 ## Status
 
-This repository contains the `v0.1.0` Node.js skeleton. It implements `init`, `doctor`, `rules`, `auto`, `add`, `claim`, `done`, and `list`. It has no web UI, Obsidian dependency, daemon, network service, or cross-machine sync.
+This repository contains the `v0.1.0` Node.js skeleton. It implements `init`, `doctor`, `rules`, `auto`, `add`, `claim`, `done`, `list`, and a read-only local board UI. It has no Obsidian dependency, daemon, external network exposure, or cross-machine sync.
 
 ## Requirements
 
@@ -35,6 +35,16 @@ The automatic installer backs up each file as `<name>.bak-<timestamp>`, replaces
 Auto mode is opt-in and workspace-local. `atb init --auto` or `atb auto on` enables it; `atb auto off` disables it, and `atb auto status` reports `enabled`, `window_minutes`, `create_allowed`, and `next_check_after`.
 When enabled, `atb claim <slug> --actor <name> --goal "..."` creates an agent-origin task if the slug is absent. With auto off a missing slug exits `4`; with auto on but no goal it exits `5`; an existing task is claimed normally and the supplied goal is ignored. `--no-create` keeps sync on but disables claim-time creation.
 `--window` is a check hint, not a timer: it only changes `next_check_after`, used on the next `atb` call or agent-turn boundary. `atb auto on --window 5m`.
+
+## Board UI
+
+`atb board` serves a read-only page at `http://127.0.0.1:7788` and opens it in the default browser. Use `--no-open` to print the URL only, or `--port 0` to choose a free local port.
+
+The server binds only to `127.0.0.1`. It reads `.atb/board.json` and `.atb/config.json` on page load or refresh; it has no background timer and no write endpoint.
+
+```sh
+atb board --port 7788 --no-open
+```
 
 Manual installation uses the same self-gated block. Add it to the agent rule files you choose and replace `<nonce>` with a random unique value:
 
@@ -110,6 +120,7 @@ Every command accepts `--workspace <path>` and defaults to the current directory
 | `atb claim` | Claims a task; auto mode can create it when `--goal` is supplied. |
 | `atb done` | Completes a claimed task for its owner and records evidence. |
 | `atb list` | Shows tasks and events after `--since`, optionally filtered by `--origin`. |
+| `atb board` | Serves a read-only local board UI bound to `127.0.0.1`. |
 
 ## Exit Codes
 

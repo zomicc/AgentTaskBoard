@@ -8,7 +8,7 @@
 
 ## 状态
 
-这个仓库包含 `v0.1.0` 的 Node.js 骨架，实现 `init`、`doctor`、`rules`、`auto`、`add`、`claim`、`done`、`list`。它没有 Web 面板、Obsidian 依赖、常驻进程、网络服务或跨机器同步。
+这个仓库包含 `v0.1.0` 的 Node.js 骨架，实现 `init`、`doctor`、`rules`、`auto`、`add`、`claim`、`done`、`list` 与只读本地看板。它没有 Obsidian 依赖、常驻进程、外部网络暴露或跨机器同步。
 
 ## 需求
 
@@ -35,6 +35,16 @@ atb --version
 自动模式是选择性启用且只属于当前工作区。`atb init --auto` 或 `atb auto on` 启用，`atb auto off` 停用，`atb auto status` 显示 `enabled`、`window_minutes`、`create_allowed` 与 `next_check_after`。
 启用后，`atb claim <slug> --actor <name> --goal "..."` 会在 slug 不存在时创建 agent 来源任务。自动模式关闭时，缺少任务会以 `4` 结束；开启但没给 goal 会以 `5` 结束；任务已存在时照常认领，并忽略这次传入的 goal。`--no-create` 保留同步提示但停用认领时建卡。
 `--window` 只是下次检查的提示，不是定时器：它只影响 `next_check_after`，并在下一次 `atb` 调用或代理回合边界使用。示例：`atb auto on --window 5m`。
+
+## 可视化看板
+
+`atb board` 会在 `http://127.0.0.1:7788` 提供只读页面，并尝试用默认浏览器打开。使用 `--no-open` 只打印地址，或使用 `--port 0` 自动选择本机空闲端口。
+
+服务只绑定 `127.0.0.1`。页面打开或刷新时才读取 `.atb/board.json` 与 `.atb/config.json`；没有后台定时器，也没有写入接口。
+
+```sh
+atb board --port 7788 --no-open
+```
 
 手动安装使用同一个自门控区块。将它加入你选择的 agent 规则文件，并把 `<nonce>` 换成随机唯一值：
 
@@ -110,6 +120,7 @@ atb done first-task --actor builder --evidence-kind path --evidence-ref "."
 | `atb claim` | 认领任务；自动模式可在提供 `--goal` 时创建任务。 |
 | `atb done` | 由 owner 完成已认领任务并记录证据。 |
 | `atb list` | 显示 `--since` 之后的任务与事件，可用 `--origin` 筛选。 |
+| `atb board` | 在 `127.0.0.1` 提供只读本地任务看板。 |
 
 ## 退出码
 

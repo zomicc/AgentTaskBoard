@@ -6,6 +6,10 @@
   "bin": {
     "atb": "./bin/atb.js"
   },
+  "files": [
+    "bin/atb.js",
+    "web/index.html"
+  ],
   "engines": {
     "node": ">=20"
   },

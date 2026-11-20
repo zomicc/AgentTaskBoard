@@ -3,6 +3,7 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 
@@ -46,6 +47,7 @@ const OPTIONS = new Set([
   'expect',
   'window',
   'origin',
+  'port',
 ]);
 
 const BOOLEAN_OPTIONS = new Set([
@@ -55,6 +57,7 @@ const BOOLEAN_OPTIONS = new Set([
   'rules',
   'auto',
   'no-create',
+  'no-open',
 ]);
 
 class CliError extends Error {
@@ -79,6 +82,7 @@ function usage() {
     '  atb claim <task-id-or-slug> --actor <name> [--goal <text>] [--deliverable <path>] [--workspace <path>]',
     '  atb done <task-id-or-slug> --actor <name> --evidence-kind <kind> --evidence-ref <ref>',
     '  atb list [--since <seq>] [--origin user|agent] [--workspace <path>]',
+    '  atb board [--port <number>] [--no-open] [--workspace <path>]',
     '  atb --version',
     '',
     'Common options:',
@@ -91,6 +95,8 @@ function usage() {
     '  --window <duration>      Auto check interval (default: 5m; not a timer)',
     '  --no-create              In auto mode, never create tasks during claim',
     '  --origin <origin>        Filter list results by user or agent',
+    '  --port <number>          Board UI port (default: 7788; 0 picks a free port)',
+    '  --no-open                Do not open the board UI in a browser',
     '  --dry-run                Print the change plan without writing',
     '  --yes                    Apply every selected rule change without prompting',
   ].join('\n');
@@ -1747,7 +1753,188 @@ function commandList(options, positionals) {
   });
 }
 
-function run(argv) {
+function parsePort(value) {
+  if (value === undefined) {
+    return 7788;
+  }
+  if (!/^\d+$/.test(String(value))) {
+    throw new CliError(EXIT.INVALID, '--port must be an integer from 0 to 65535');
+  }
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new CliError(EXIT.INVALID, '--port must be an integer from 0 to 65535');
+  }
+  return port;
+}
+
+function openBrowser(url) {
+  const childProcess = require('node:child_process');
+  let command;
+  let args;
+  if (process.platform === 'win32') {
+    command = 'cmd.exe';
+    args = ['/c', 'start', '', url];
+  } else if (process.platform === 'darwin') {
+    command = 'open';
+    args = [url];
+  } else {
+    command = 'xdg-open';
+    args = [url];
+  }
+  try {
+    const child = childProcess.spawn(command, args, {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    child.on('error', () => {});
+    child.unref();
+  } catch {
+    // Opening a browser is a convenience; the URL remains available in stdout.
+  }
+}
+
+function boardSnapshot(workspace) {
+  const paths = statePaths(workspace);
+  if (!fs.existsSync(paths.boardPath)) {
+    throw new CliError(
+      EXIT.BOARD_UNAVAILABLE,
+      `board is not initialized in ${workspace}; run "atb init"`,
+    );
+  }
+  const board = readBoard(paths.boardPath);
+  const config = readAutoConfig(paths.configPath);
+  return {
+    protocol: board.protocol,
+    tasks: board.tasks,
+    auto: autoSnapshot(config),
+    generated_at: new Date().toISOString(),
+  };
+}
+
+async function commandBoard(options, positionals) {
+  if (positionals.length !== 0 || options.deliverable.length !== 0) {
+    throw new CliError(EXIT.INVALID, 'board does not take positional arguments');
+  }
+  const workspace = resolveWorkspace(options.workspace);
+  const paths = statePaths(workspace);
+  if (!fs.existsSync(paths.boardPath)) {
+    throw new CliError(
+      EXIT.BOARD_UNAVAILABLE,
+      `board is not initialized in ${workspace}; run "atb init"`,
+    );
+  }
+  readBoard(paths.boardPath);
+
+  const port = parsePort(options.port);
+  const uiPath = path.resolve(__dirname, '..', 'web', 'index.html');
+  let html;
+  try {
+    html = fs.readFileSync(uiPath, 'utf8');
+  } catch (error) {
+    throw new CliError(EXIT.BOARD_UNAVAILABLE, `cannot read board UI: ${error.message}`);
+  }
+
+  const server = http.createServer((request, response) => {
+    const headers = {
+      'Cache-Control': 'no-store',
+      'Content-Security-Policy': [
+        "default-src 'self'",
+        "script-src 'unsafe-inline'",
+        "style-src 'unsafe-inline'",
+        "img-src 'self' data:",
+        "connect-src 'self'",
+        "base-uri 'none'",
+        "frame-ancestors 'none'",
+      ].join('; '),
+      'Referrer-Policy': 'no-referrer',
+      'X-Content-Type-Options': 'nosniff',
+    };
+
+    if (request.method !== 'GET') {
+      response.writeHead(404, { ...headers, 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(`${JSON.stringify({ ok: false, error: 'not found' })}\n`);
+      return;
+    }
+
+    if (request.url === '/' || request.url === '/index.html') {
+      response.writeHead(200, { ...headers, 'Content-Type': 'text/html; charset=utf-8' });
+      response.end(html);
+      return;
+    }
+
+    if (request.url === '/api/board') {
+      try {
+        const snapshot = boardSnapshot(workspace);
+        response.writeHead(200, { ...headers, 'Content-Type': 'application/json; charset=utf-8' });
+        response.end(`${JSON.stringify(snapshot)}\n`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        response.writeHead(503, { ...headers, 'Content-Type': 'application/json; charset=utf-8' });
+        response.end(`${JSON.stringify({ ok: false, error: message })}\n`);
+      }
+      return;
+    }
+
+    response.writeHead(404, { ...headers, 'Content-Type': 'application/json; charset=utf-8' });
+    response.end(`${JSON.stringify({ ok: false, error: 'not found' })}\n`);
+  });
+
+  await new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off('listening', onListening);
+      reject(new CliError(EXIT.BOARD_UNAVAILABLE, `cannot start board UI: ${error.message}`));
+    };
+    const onListening = () => {
+      server.off('error', onError);
+      resolve();
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(port, '127.0.0.1');
+  });
+
+  const address = server.address();
+  const actualPort = typeof address === 'object' && address ? address.port : port;
+  const url = `http://127.0.0.1:${actualPort}`;
+  process.stdout.write(`${JSON.stringify({
+    ok: true,
+    command: 'board',
+    url,
+    port: actualPort,
+    workspace_ref: workspace,
+    read_only: true,
+  })}\n`);
+  if (!options['no-open']) {
+    openBrowser(url);
+  }
+
+  return new Promise((resolve) => {
+    let stopping = false;
+    const cleanup = () => {
+      process.off('SIGINT', stop);
+      process.off('SIGTERM', stop);
+    };
+    const stop = () => {
+      if (stopping) {
+        return;
+      }
+      stopping = true;
+      server.close(() => {
+        cleanup();
+        resolve(EXIT.OK);
+      });
+    };
+    process.on('SIGINT', stop);
+    process.on('SIGTERM', stop);
+    server.once('close', () => {
+      cleanup();
+      resolve(EXIT.OK);
+    });
+  });
+}
+
+async function run(argv) {
   const parsed = parseArgs(argv);
   switch (parsed.command) {
     case 'help':
@@ -1794,19 +1981,25 @@ function run(argv) {
     case 'list':
       process.stdout.write(`${JSON.stringify(commandList(parsed.options, parsed.positionals), null, 2)}\n`);
       return EXIT.OK;
+    case 'board':
+      return commandBoard(parsed.options, parsed.positionals);
     default:
       throw new CliError(EXIT.INVALID, `unknown command: ${parsed.command}`);
   }
 }
 
-try {
-  process.exitCode = run(process.argv.slice(2));
-} catch (error) {
-  const code = error instanceof CliError ? error.code : EXIT.CORRUPT_STATE;
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`${JSON.stringify({ ok: false, code, error: message })}\n`);
-  if (error instanceof CliError && error.code === EXIT.INVALID) {
-    process.stderr.write(`${usage()}\n`);
+async function main() {
+  try {
+    process.exitCode = await run(process.argv.slice(2));
+  } catch (error) {
+    const code = error instanceof CliError ? error.code : EXIT.CORRUPT_STATE;
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`${JSON.stringify({ ok: false, code, error: message })}\n`);
+    if (error instanceof CliError && error.code === EXIT.INVALID) {
+      process.stderr.write(`${usage()}\n`);
+    }
+    process.exitCode = code;
   }
-  process.exitCode = code;
 }
+
+main();

@@ -1,0 +1,1829 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111210" media="(prefers-color-scheme: dark)">
+  <title>AgentTaskBoard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f7f7f5;
+      --surface: #ffffff;
+      --surface-soft: #f1f2ee;
+      --surface-hover: #f7f8f5;
+      --ink: #171916;
+      --ink-soft: #51564f;
+      --ink-faint: #7b8178;
+      --line: #dfe2da;
+      --line-strong: #c9cec3;
+      --accent: #2563eb;
+      --accent-soft: #eaf0ff;
+      --focus: #2563eb;
+      --todo: #697267;
+      --todo-soft: #eef0ec;
+      --claimed: #9a6500;
+      --claimed-soft: #fff5d9;
+      --done: #137a2b;
+      --done-soft: #e9f7ec;
+      --blocked: #a44e27;
+      --blocked-soft: #fff0e8;
+      --stale: #a32d2d;
+      --stale-soft: #ffeded;
+      --shadow: 0 1px 2px rgba(23, 25, 22, 0.05);
+      --radius: 8px;
+      --radius-sm: 6px;
+      --content: 1180px;
+    }
+
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --page: #111210;
+      --surface: #191b18;
+      --surface-soft: #20231f;
+      --surface-hover: #22251f;
+      --ink: #f2f4ef;
+      --ink-soft: #b9beb5;
+      --ink-faint: #8f958b;
+      --line: #30342d;
+      --line-strong: #43493f;
+      --accent: #8ab4ff;
+      --accent-soft: #1e2b45;
+      --focus: #8ab4ff;
+      --todo: #b1b8ad;
+      --todo-soft: #292d27;
+      --claimed: #f5c84c;
+      --claimed-soft: #382f17;
+      --done: #68ce7b;
+      --done-soft: #19351f;
+      --blocked: #f0a27e;
+      --blocked-soft: #3b261d;
+      --stale: #ff8e8e;
+      --stale-soft: #3a2020;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-width: 320px;
+      background: var(--page);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--page);
+      color: var(--ink);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC",
+        "Noto Sans SC", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      letter-spacing: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button,
+    input,
+    select {
+      color: inherit;
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .svg-sprite {
+      position: absolute;
+      width: 0;
+      height: 0;
+      overflow: hidden;
+    }
+
+    .icon {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 auto;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 2;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .topbar-inner {
+      width: min(calc(100% - 40px), var(--content));
+      min-height: 64px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .brand {
+      min-width: 0;
+      flex: 1 1 auto;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      overflow: hidden;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: var(--ink);
+      color: var(--surface);
+      font-size: 15px;
+      font-weight: 760;
+    }
+
+    .brand-copy {
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .brand h1 {
+      margin: 0;
+      overflow: hidden;
+      font-size: 16px;
+      line-height: 1.2;
+      font-weight: 720;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      overflow: hidden;
+      color: var(--ink-faint);
+      font-size: 11px;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .actions {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .button {
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--ink-soft);
+      padding: 0 11px;
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+      transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+    }
+
+    .button:hover {
+      border-color: var(--line-strong);
+      background: var(--surface-soft);
+      color: var(--ink);
+    }
+
+    .button.icon-only {
+      width: 34px;
+      padding: 0;
+    }
+
+    .button.primary {
+      border-color: var(--ink);
+      background: var(--ink);
+      color: var(--surface);
+    }
+
+    .button.primary:hover {
+      border-color: var(--ink);
+      background: var(--ink-soft);
+      color: var(--surface);
+    }
+
+    [data-tooltip] {
+      position: relative;
+    }
+
+    [data-tooltip]::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      top: calc(100% + 7px);
+      right: 0;
+      z-index: 30;
+      width: max-content;
+      max-width: 220px;
+      padding: 5px 7px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: var(--ink);
+      color: var(--surface);
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.35;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-2px);
+      transition: opacity 100ms ease, transform 100ms ease;
+    }
+
+    [data-tooltip]:hover::after,
+    [data-tooltip]:focus-visible::after {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .page {
+      width: min(calc(100% - 40px), var(--content));
+      margin: 0 auto;
+      padding: 32px 0 42px;
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 14px;
+    }
+
+    .eyebrow {
+      margin: 0 0 3px;
+      color: var(--ink-faint);
+      font-size: 10px;
+      font-weight: 760;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .section-heading h2 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+      font-weight: 720;
+    }
+
+    .auto-state {
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      padding: 0 12px;
+      color: var(--ink-soft);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .auto-dot {
+      width: 7px;
+      height: 7px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--ink-faint);
+    }
+
+    .auto-state.on .auto-dot {
+      background: var(--done);
+      box-shadow: 0 0 0 3px var(--done-soft);
+    }
+
+    .auto-state.off .auto-dot {
+      background: var(--todo);
+    }
+
+    .auto-divider {
+      width: 1px;
+      height: 15px;
+      background: var(--line);
+    }
+
+    .auto-next {
+      color: var(--ink-faint);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .stat {
+      min-width: 0;
+      min-height: 108px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 14px 15px 13px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--ink-faint);
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .stat-icon {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      background: var(--surface-soft);
+      color: var(--ink-soft);
+    }
+
+    .stat-icon .icon {
+      width: 14px;
+      height: 14px;
+    }
+
+    .stat.claimed .stat-icon {
+      background: var(--claimed-soft);
+      color: var(--claimed);
+    }
+
+    .stat.done .stat-icon {
+      background: var(--done-soft);
+      color: var(--done);
+    }
+
+    .stat-value {
+      margin-top: 12px;
+      font-size: 32px;
+      line-height: 1;
+      font-weight: 720;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(130px, 0.7fr)) auto;
+      align-items: end;
+      gap: 10px;
+      margin: 24px 0 22px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    .field {
+      min-width: 0;
+    }
+
+    .field-label {
+      display: block;
+      margin: 0 0 5px;
+      color: var(--ink-faint);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    .input-wrap .icon {
+      position: absolute;
+      top: 50%;
+      left: 10px;
+      color: var(--ink-faint);
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    .input,
+    .select {
+      width: 100%;
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--ink);
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    .input {
+      padding-left: 33px;
+    }
+
+    .input::placeholder {
+      color: var(--ink-faint);
+    }
+
+    .input:hover,
+    .select:hover {
+      border-color: var(--line-strong);
+    }
+
+    .clear-button {
+      height: 36px;
+    }
+
+    .board-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 11px;
+    }
+
+    .board-toolbar h2 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.3;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--ink-faint);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .error-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 14px;
+      border: 1px solid var(--stale);
+      border-radius: var(--radius-sm);
+      background: var(--stale-soft);
+      color: var(--stale);
+      padding: 10px 12px;
+      font-size: 12px;
+    }
+
+    .loading-state,
+    .empty-state {
+      min-height: 260px;
+      display: grid;
+      place-items: center;
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 30px;
+      text-align: center;
+    }
+
+    .loading-inner,
+    .empty-inner {
+      max-width: 480px;
+    }
+
+    .loading-icon {
+      width: 22px;
+      height: 22px;
+      margin: 0 auto 10px;
+      color: var(--ink-faint);
+      animation: spin 850ms linear infinite;
+    }
+
+    .loading-text {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 12px;
+    }
+
+    .empty-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 12px;
+      border-radius: 8px;
+      background: var(--surface-soft);
+      color: var(--ink-soft);
+    }
+
+    .empty-icon .icon {
+      width: 20px;
+      height: 20px;
+    }
+
+    .empty-state h3 {
+      margin: 0 0 5px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .empty-state p {
+      margin: 0;
+      color: var(--ink-faint);
+      font-size: 12px;
+    }
+
+    .command-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-soft);
+      padding: 7px 8px 7px 11px;
+      text-align: left;
+    }
+
+    .command-box code {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      color: var(--ink-soft);
+      font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .copy-button {
+      width: 28px;
+      height: 28px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: var(--surface);
+      color: var(--ink-soft);
+    }
+
+    .copy-button:hover {
+      border-color: var(--line-strong);
+      color: var(--ink);
+    }
+
+    .copy-button .icon {
+      width: 13px;
+      height: 13px;
+    }
+
+    .task-groups {
+      display: grid;
+      gap: 22px;
+    }
+
+    .task-group {
+      min-width: 0;
+    }
+
+    .group-heading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .group-heading .icon {
+      width: 15px;
+      height: 15px;
+      color: var(--ink-faint);
+    }
+
+    .group-heading h3 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .group-count {
+      min-width: 20px;
+      height: 20px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--ink-faint);
+      padding: 0 6px;
+      font-size: 10px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .task-list {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .task {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      padding: 14px 15px;
+      transition: background-color 100ms ease;
+    }
+
+    .task + .task {
+      border-top: 1px solid var(--line);
+    }
+
+    .task:hover {
+      background: var(--surface-hover);
+    }
+
+    .task-top {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-bottom: 7px;
+    }
+
+    .status-badge,
+    .origin-badge,
+    .meta-item,
+    .deliverable {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    .status-badge {
+      min-height: 21px;
+      border-radius: 999px;
+      padding: 1px 8px;
+      font-size: 10px;
+      font-weight: 720;
+    }
+
+    .status-badge .icon {
+      width: 11px;
+      height: 11px;
+    }
+
+    .status-claimed {
+      background: var(--claimed-soft);
+      color: var(--claimed);
+    }
+
+    .status-todo {
+      background: var(--todo-soft);
+      color: var(--todo);
+    }
+
+    .status-done {
+      background: var(--done-soft);
+      color: var(--done);
+    }
+
+    .status-blocked {
+      background: var(--blocked-soft);
+      color: var(--blocked);
+    }
+
+    .status-stale {
+      background: var(--stale-soft);
+      color: var(--stale);
+    }
+
+    .task-slug {
+      color: var(--ink-soft);
+      font: 11px/1.4 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .origin-badge {
+      min-height: 20px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 0 6px;
+      color: var(--ink-faint);
+      font-size: 10px;
+      font-weight: 650;
+    }
+
+    .origin-badge .icon {
+      width: 10px;
+      height: 10px;
+    }
+
+    .task h4 {
+      margin: 0;
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.45;
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+
+    .task-meta {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      margin-top: 9px;
+      color: var(--ink-faint);
+      font-size: 11px;
+    }
+
+    .meta-item .icon {
+      width: 11px;
+      height: 11px;
+    }
+
+    .meta-value {
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .task-extra {
+      display: grid;
+      gap: 7px;
+      margin-top: 11px;
+    }
+
+    .deliverables {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .extra-label {
+      color: var(--ink-faint);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .deliverable {
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--surface-soft);
+      padding: 1px 5px;
+      color: var(--ink-soft);
+      font: 10px/1.6 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    .evidence {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      border-left: 2px solid var(--done);
+      background: var(--done-soft);
+      color: var(--done);
+      padding: 5px 8px;
+      font-size: 10px;
+      overflow-wrap: anywhere;
+    }
+
+    .evidence .icon {
+      width: 11px;
+      height: 11px;
+      margin-top: 1px;
+    }
+
+    .task-side {
+      min-width: 88px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--ink-faint);
+      text-align: right;
+    }
+
+    .task-date {
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .task-id {
+      max-width: 112px;
+      overflow: hidden;
+      color: var(--ink-faint);
+      font: 9px/1.4 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 28px;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      color: var(--ink-faint);
+      font-size: 10px;
+    }
+
+    .read-only {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .read-only::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--done);
+    }
+
+    .is-loading .refresh-icon {
+      animation: spin 750ms linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (max-width: 900px) {
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .toolbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .field-search {
+        grid-column: 1 / -1;
+      }
+
+      .clear-button {
+        justify-self: start;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .topbar-inner,
+      .page {
+        width: min(calc(100% - 24px), var(--content));
+      }
+
+      .topbar-inner {
+        min-height: 58px;
+      }
+
+      .brand p {
+        display: none;
+      }
+
+      .actions {
+        gap: 6px;
+      }
+
+      .button-label {
+        display: none;
+      }
+
+      .button:not(.icon-only) {
+        width: 34px;
+        padding: 0;
+      }
+
+      .page {
+        padding-top: 22px;
+      }
+
+      .section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .section-heading h2 {
+        font-size: 20px;
+      }
+
+      .auto-state {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .stats {
+        gap: 8px;
+      }
+
+      .stat {
+        min-height: 98px;
+        padding: 12px;
+      }
+
+      .stat-value {
+        font-size: 28px;
+      }
+
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .field-search {
+        grid-column: auto;
+      }
+
+      .task {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+      }
+
+      .task-side {
+        min-width: 0;
+        align-items: flex-start;
+        flex-direction: row;
+        text-align: left;
+      }
+
+      .task-id {
+        max-width: 160px;
+      }
+
+      .footer {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+      }
+    }
+
+    @media (max-width: 360px) {
+      .brand-copy {
+        display: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <svg class="svg-sprite" aria-hidden="true">
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+    <symbol id="i-loader" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M6.1 8a7 7 0 0 1 11.2-1L20 12M4 12l2.7 5a7 7 0 0 0 11.2-1"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14.5 14.5 0 0 1 0 18M12 3a14.5 14.5 0 0 0 0 18"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.7 2.2 17.6A2 2 0 0 0 3.9 20h16.2a2 2 0 0 0 1.7-2.4L13.7 3.7a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M20 13 13 20l-9-9V4h7Z"/><circle cx="8.5" cy="8.5" r="1"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M9 12h.01M15 12h.01M9 16h6M12 3v4"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">A</div>
+        <div class="brand-copy">
+          <h1>AgentTaskBoard</h1>
+          <p data-i18n="tagline">Local task coordination</p>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="button" id="languageButton" type="button" data-i18n-aria="switchLanguage">
+          <svg class="icon" aria-hidden="true"><use href="#i-globe"/></svg>
+          <span class="button-label" id="languageLabel">中文</span>
+        </button>
+        <button class="button icon-only" id="themeButton" type="button" data-tooltip="Toggle theme" data-i18n-tooltip="toggleTheme" data-i18n-aria="toggleTheme">
+          <svg class="icon" aria-hidden="true"><use id="themeIcon" href="#i-moon"/></svg>
+        </button>
+        <button class="button primary" id="refreshButton" type="button">
+          <svg class="icon refresh-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+          <span class="button-label" data-i18n="refresh">Refresh</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <section aria-labelledby="overviewTitle">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow" data-i18n="overview">Overview</p>
+          <h2 id="overviewTitle" data-i18n="taskPulse">Task pulse</h2>
+        </div>
+        <div class="auto-state off" id="autoState">
+          <span class="auto-dot" aria-hidden="true"></span>
+          <span id="autoLabel">Auto off</span>
+          <span class="auto-divider" aria-hidden="true"></span>
+          <span class="auto-next" id="autoNext">No scheduled check</span>
+        </div>
+      </div>
+
+      <div class="stats" aria-label="Task summary" data-i18n-aria="taskSummary">
+        <article class="stat total">
+          <div class="stat-top">
+            <span data-i18n="totalTasks">Total tasks</span>
+            <span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg></span>
+          </div>
+          <div class="stat-value" id="totalCount">0</div>
+        </article>
+        <article class="stat claimed">
+          <div class="stat-top">
+            <span data-i18n="inProgress">In progress</span>
+            <span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg></span>
+          </div>
+          <div class="stat-value" id="activeCount">0</div>
+        </article>
+        <article class="stat done">
+          <div class="stat-top">
+            <span data-i18n="completed">Completed</span>
+            <span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></span>
+          </div>
+          <div class="stat-value" id="doneCount">0</div>
+        </article>
+        <article class="stat todo">
+          <div class="stat-top">
+            <span data-i18n="waiting">Waiting</span>
+            <span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg></span>
+          </div>
+          <div class="stat-value" id="waitingCount">0</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="toolbar" aria-label="Filters" data-i18n-aria="filters">
+      <label class="field field-search">
+        <span class="field-label" data-i18n="search">Search</span>
+        <span class="input-wrap">
+          <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+          <input class="input" id="searchInput" type="search" autocomplete="off" data-i18n-placeholder="searchPlaceholder">
+        </span>
+      </label>
+      <label class="field">
+        <span class="field-label" data-i18n="status">Status</span>
+        <select class="select" id="statusFilter">
+          <option value="all" data-i18n="allStatuses">All statuses</option>
+          <option value="claimed" data-i18n="statusClaimed">In progress</option>
+          <option value="todo" data-i18n="statusTodo">Waiting</option>
+          <option value="done" data-i18n="statusDone">Completed</option>
+          <option value="blocked" data-i18n="statusBlocked">Blocked</option>
+          <option value="stale" data-i18n="statusStale">Stale</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label" data-i18n="origin">Origin</span>
+        <select class="select" id="originFilter">
+          <option value="all" data-i18n="allOrigins">All origins</option>
+          <option value="user" data-i18n="userOrigin">User</option>
+          <option value="agent" data-i18n="agentOrigin">Agent</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label" data-i18n="project">Project</span>
+        <select class="select" id="projectFilter">
+          <option value="all" data-i18n="allProjects">All projects</option>
+        </select>
+      </label>
+      <button class="button clear-button" id="clearButton" type="button">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+        <span class="button-label" data-i18n="clearFilters">Clear</span>
+      </button>
+    </section>
+
+    <section aria-labelledby="boardTitle">
+      <div class="board-toolbar">
+        <h2 id="boardTitle" data-i18n="taskList">Task list</h2>
+        <span class="result-count" id="resultCount">0</span>
+      </div>
+      <div id="errorRegion"></div>
+      <div id="boardContent" aria-live="polite"></div>
+    </section>
+
+    <footer class="footer">
+      <span class="read-only" data-i18n="readOnly">Read-only local board</span>
+      <span id="generatedAt"></span>
+    </footer>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const messages = {
+        en: {
+          tagline: 'Local task coordination',
+          overview: 'Overview',
+          taskPulse: 'Task pulse',
+          totalTasks: 'Total tasks',
+          inProgress: 'In progress',
+          completed: 'Completed',
+          waiting: 'Waiting',
+          autoOn: 'Auto on',
+          autoOff: 'Auto off',
+          nextCheck: 'Next check {time}',
+          noScheduledCheck: 'No scheduled check',
+          taskSummary: 'Task summary',
+          filters: 'Filters',
+          search: 'Search',
+          searchPlaceholder: 'Search task, owner, project',
+          status: 'Status',
+          allStatuses: 'All statuses',
+          statusClaimed: 'In progress',
+          statusTodo: 'Waiting',
+          statusDone: 'Completed',
+          statusBlocked: 'Blocked',
+          statusStale: 'Stale',
+          origin: 'Origin',
+          allOrigins: 'All origins',
+          userOrigin: 'User',
+          agentOrigin: 'Agent',
+          project: 'Project',
+          allProjects: 'All projects',
+          clearFilters: 'Clear',
+          taskList: 'Task list',
+          taskCount: '{count} tasks',
+          oneTask: '1 task',
+          noTasks: 'No tasks yet',
+          noTasksHint: 'Create the first task from the command line.',
+          noMatch: 'No matching tasks',
+          noMatchHint: 'Change or clear the current filters.',
+          loading: 'Loading board',
+          loadError: 'The board could not be loaded.',
+          retry: 'Retry',
+          owner: 'Owner',
+          stage: 'Stage',
+          updated: 'Updated',
+          deliverables: 'Deliverables',
+          noDeliverables: 'No deliverables',
+          evidence: 'Evidence',
+          unassigned: 'Unassigned',
+          groupActive: 'Active',
+          groupTodo: 'Waiting',
+          groupBlocked: 'Blocked',
+          groupDone: 'Completed',
+          copy: 'Copy',
+          copied: 'Copied',
+          readOnly: 'Read-only local board',
+          generatedAt: 'Loaded {time}',
+          refresh: 'Refresh',
+          switchLanguage: 'Switch language',
+          toggleTheme: 'Toggle theme',
+          user: 'User',
+          agent: 'Agent',
+          unknown: 'Unknown',
+          staleHint: 'Claimed over 24 hours ago',
+        },
+        zh: {
+          tagline: '本地任务协作',
+          overview: '概览',
+          taskPulse: '任务动态',
+          totalTasks: '任务总数',
+          inProgress: '进行中',
+          completed: '已完成',
+          waiting: '等待中',
+          autoOn: '自动模式已开',
+          autoOff: '自动模式已关',
+          nextCheck: '下次检查 {time}',
+          noScheduledCheck: '暂无检查提示',
+          taskSummary: '任务汇总',
+          filters: '筛选',
+          search: '搜索',
+          searchPlaceholder: '搜索任务、owner、项目',
+          status: '状态',
+          allStatuses: '全部状态',
+          statusClaimed: '进行中',
+          statusTodo: '等待中',
+          statusDone: '已完成',
+          statusBlocked: '阻塞',
+          statusStale: '陈旧',
+          origin: '来源',
+          allOrigins: '全部来源',
+          userOrigin: '用户',
+          agentOrigin: '代理',
+          project: '项目',
+          allProjects: '全部项目',
+          clearFilters: '清除',
+          taskList: '任务列表',
+          taskCount: '{count} 个任务',
+          oneTask: '1 个任务',
+          noTasks: '还没有任务',
+          noTasksHint: '在命令行创建第一个任务。',
+          noMatch: '没有匹配的任务',
+          noMatchHint: '调整或清除当前筛选条件。',
+          loading: '正在加载看板',
+          loadError: '无法加载看板。',
+          retry: '重试',
+          owner: 'Owner',
+          stage: '阶段',
+          updated: '更新',
+          deliverables: '产物',
+          noDeliverables: '暂无产物',
+          evidence: '证据',
+          unassigned: '未分配',
+          groupActive: '进行中',
+          groupTodo: '等待中',
+          groupBlocked: '阻塞',
+          groupDone: '已完成',
+          copy: '复制',
+          copied: '已复制',
+          readOnly: '只读本地看板',
+          generatedAt: '加载于 {time}',
+          refresh: '刷新',
+          switchLanguage: '切换语言',
+          toggleTheme: '切换主题',
+          user: '用户',
+          agent: '代理',
+          unknown: '未知',
+          staleHint: '认领已超过 24 小时',
+        },
+      };
+
+      const state = {
+        data: null,
+        loading: false,
+        lang: 'en',
+        theme: 'light',
+        filters: {
+          query: '',
+          status: 'all',
+          origin: 'all',
+          project: 'all',
+        },
+      };
+
+      const $ = (id) => document.getElementById(id);
+      const boardContent = $('boardContent');
+      const errorRegion = $('errorRegion');
+      const searchInput = $('searchInput');
+      const statusFilter = $('statusFilter');
+      const originFilter = $('originFilter');
+      const projectFilter = $('projectFilter');
+      const refreshButton = $('refreshButton');
+      const languageButton = $('languageButton');
+      const themeButton = $('themeButton');
+      const clearButton = $('clearButton');
+
+      function t(key, values = {}) {
+        const template = messages[state.lang][key] || messages.en[key] || key;
+        return Object.entries(values).reduce(
+          (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+          template,
+        );
+      }
+
+      function locale() {
+        return state.lang === 'zh' ? 'zh-CN' : 'en';
+      }
+
+      function storageGet(key) {
+        try {
+          return localStorage.getItem(key);
+        } catch {
+          return null;
+        }
+      }
+
+      function storageSet(key, value) {
+        try {
+          localStorage.setItem(key, value);
+        } catch {
+          // Preferences remain valid for the current page when storage is unavailable.
+        }
+      }
+
+      function createIcon(name, className = 'icon') {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', className);
+        svg.setAttribute('aria-hidden', 'true');
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttribute('href', `#i-${name}`);
+        svg.appendChild(use);
+        return svg;
+      }
+
+      function element(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) {
+          node.className = className;
+        }
+        if (text !== undefined) {
+          node.textContent = text;
+        }
+        return node;
+      }
+
+      function formatDate(value, options = {}) {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+          return t('unknown');
+        }
+        return new Intl.DateTimeFormat(locale(), {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          ...options,
+        }).format(date);
+      }
+
+      function taskState(task) {
+        if (task.status === 'claimed') {
+          const updated = new Date(task.updated_ts).getTime();
+          if (Number.isFinite(updated) && Date.now() - updated > 24 * 60 * 60 * 1000) {
+            return 'stale';
+          }
+          return 'claimed';
+        }
+        if (['todo', 'done', 'blocked', 'stale'].includes(task.status)) {
+          return task.status;
+        }
+        return 'todo';
+      }
+
+      function statusLabel(status) {
+        return {
+          claimed: t('statusClaimed'),
+          todo: t('statusTodo'),
+          done: t('statusDone'),
+          blocked: t('statusBlocked'),
+          stale: t('statusStale'),
+        }[status] || status;
+      }
+
+      function statusIcon(status) {
+        return {
+          claimed: 'activity',
+          todo: 'clock',
+          done: 'check',
+          blocked: 'alert',
+          stale: 'alert',
+        }[status] || 'clock';
+      }
+
+      function applyStaticText() {
+        document.documentElement.lang = state.lang === 'zh' ? 'zh-CN' : 'en';
+        document.title = state.lang === 'zh' ? 'AgentTaskBoard 任务看板' : 'AgentTaskBoard';
+        document.querySelectorAll('[data-i18n]').forEach((node) => {
+          node.textContent = t(node.dataset.i18n);
+        });
+        document.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
+          node.placeholder = t(node.dataset.i18nPlaceholder);
+        });
+        document.querySelectorAll('[data-i18n-aria]').forEach((node) => {
+          node.setAttribute('aria-label', t(node.dataset.i18nAria));
+        });
+        document.querySelectorAll('[data-i18n-tooltip]').forEach((node) => {
+          node.dataset.tooltip = t(node.dataset.i18nTooltip);
+        });
+        $('languageLabel').textContent = state.lang === 'zh' ? 'EN' : '中文';
+        languageButton.setAttribute('aria-label', t('switchLanguage'));
+      }
+
+      function applyTheme() {
+        document.documentElement.dataset.theme = state.theme;
+        const isDark = state.theme === 'dark';
+        $('themeIcon').setAttribute('href', isDark ? '#i-sun' : '#i-moon');
+        themeButton.setAttribute('aria-label', t('toggleTheme'));
+        themeButton.dataset.tooltip = t('toggleTheme');
+        const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+        if (meta) {
+          meta.setAttribute('content', isDark ? '#111210' : '#f7f7f5');
+        }
+      }
+
+      function setLoading(loading) {
+        state.loading = loading;
+        refreshButton.disabled = loading;
+        refreshButton.classList.toggle('is-loading', loading);
+        refreshButton.setAttribute('aria-busy', String(loading));
+      }
+
+      function updateSummary() {
+        const tasks = state.data?.tasks || [];
+        const active = tasks.filter((task) => taskState(task) === 'claimed').length;
+        const done = tasks.filter((task) => taskState(task) === 'done').length;
+        const waiting = tasks.length - active - done;
+        $('totalCount').textContent = String(tasks.length);
+        $('activeCount').textContent = String(active);
+        $('doneCount').textContent = String(done);
+        $('waitingCount').textContent = String(Math.max(0, waiting));
+
+        const auto = state.data?.auto;
+        const autoState = $('autoState');
+        autoState.classList.toggle('on', Boolean(auto?.enabled));
+        autoState.classList.toggle('off', !auto?.enabled);
+        $('autoLabel').textContent = auto?.enabled ? t('autoOn') : t('autoOff');
+        $('autoNext').textContent = auto?.enabled && auto.next_check_after
+          ? t('nextCheck', { time: formatDate(auto.next_check_after) })
+          : t('noScheduledCheck');
+        $('generatedAt').textContent = state.data?.generated_at
+          ? t('generatedAt', { time: formatDate(state.data.generated_at) })
+          : '';
+      }
+
+      function refreshProjectOptions() {
+        const selected = state.filters.project;
+        const projects = [...new Set((state.data?.tasks || []).map((task) => task.project).filter(Boolean))]
+          .sort((a, b) => a.localeCompare(b, locale()));
+        projectFilter.replaceChildren();
+        const all = document.createElement('option');
+        all.value = 'all';
+        all.textContent = t('allProjects');
+        projectFilter.appendChild(all);
+        for (const project of projects) {
+          const option = document.createElement('option');
+          option.value = project;
+          option.textContent = project;
+          projectFilter.appendChild(option);
+        }
+        projectFilter.value = projects.includes(selected) ? selected : 'all';
+        state.filters.project = projectFilter.value;
+      }
+
+      function filteredTasks() {
+        const query = state.filters.query.trim().toLocaleLowerCase(locale());
+        return (state.data?.tasks || []).filter((task) => {
+          const status = taskState(task);
+          if (state.filters.status !== 'all' && status !== state.filters.status) {
+            return false;
+          }
+          if (state.filters.origin !== 'all' && (task.origin || 'user') !== state.filters.origin) {
+            return false;
+          }
+          if (state.filters.project !== 'all' && task.project !== state.filters.project) {
+            return false;
+          }
+          if (!query) {
+            return true;
+          }
+          return [
+            task.slug,
+            task.goal,
+            task.project,
+            task.stage,
+            task.owner,
+            task.working_subdir,
+            ...(Array.isArray(task.deliverables) ? task.deliverables : []),
+          ]
+            .filter(Boolean)
+            .some((value) => String(value).toLocaleLowerCase(locale()).includes(query));
+        });
+      }
+
+      function makeBadge(status) {
+        const badge = element('span', `status-badge status-${status}`);
+        badge.appendChild(createIcon(statusIcon(status)));
+        badge.appendChild(document.createTextNode(statusLabel(status)));
+        if (status === 'stale') {
+          badge.title = t('staleHint');
+        }
+        return badge;
+      }
+
+      function makeMeta(icon, label, value) {
+        const item = element('span', 'meta-item');
+        item.appendChild(createIcon(icon));
+        item.appendChild(document.createTextNode(`${label}: `));
+        const content = element('span', 'meta-value', value);
+        content.title = value;
+        item.appendChild(content);
+        return item;
+      }
+
+      function renderTask(task) {
+        const status = taskState(task);
+        const origin = task.origin === 'agent' ? 'agent' : 'user';
+        const row = element('article', 'task');
+        const main = element('div', 'task-main');
+        const top = element('div', 'task-top');
+        top.appendChild(makeBadge(status));
+        top.appendChild(element('span', 'task-slug', task.slug || t('unknown')));
+        const originBadge = element('span', 'origin-badge');
+        originBadge.appendChild(createIcon(origin === 'agent' ? 'bot' : 'user'));
+        originBadge.appendChild(document.createTextNode(origin === 'agent' ? t('agent') : t('user')));
+        top.appendChild(originBadge);
+        main.appendChild(top);
+        main.appendChild(element('h4', '', task.goal || t('unknown')));
+
+        const meta = element('div', 'task-meta');
+        if (task.project) {
+          meta.appendChild(makeMeta('folder', t('project'), task.project));
+        }
+        if (task.stage) {
+          meta.appendChild(makeMeta('tag', t('stage'), task.stage));
+        }
+        meta.appendChild(makeMeta('user', t('owner'), task.owner || t('unassigned')));
+        if (task.updated_ts) {
+          meta.appendChild(makeMeta('clock', t('updated'), formatDate(task.updated_ts)));
+        }
+        main.appendChild(meta);
+
+        const extra = element('div', 'task-extra');
+        const deliverables = Array.isArray(task.deliverables) ? task.deliverables.filter(Boolean) : [];
+        if (deliverables.length > 0) {
+          const list = element('div', 'deliverables');
+          list.appendChild(element('span', 'extra-label', `${t('deliverables')}:`));
+          deliverables.forEach((item) => list.appendChild(element('span', 'deliverable', item)));
+          extra.appendChild(list);
+        }
+        if (task.evidence_ref) {
+          const evidence = element('div', 'evidence');
+          evidence.appendChild(createIcon('check'));
+          evidence.appendChild(document.createTextNode(
+            `${t('evidence')}: ${task.evidence_kind || ''} ${task.evidence_ref}`.trim(),
+          ));
+          extra.appendChild(evidence);
+        }
+        if (extra.childElementCount > 0) {
+          main.appendChild(extra);
+        }
+        row.appendChild(main);
+
+        const side = element('div', 'task-side');
+        side.appendChild(element('span', 'task-date', task.updated_ts ? formatDate(task.updated_ts) : ''));
+        side.appendChild(element('span', 'task-id', task.id || ''));
+        row.appendChild(side);
+        return row;
+      }
+
+      function groupDefinitions() {
+        return [
+          { key: 'claimed', label: t('groupActive'), icon: 'activity' },
+          { key: 'todo', label: t('groupTodo'), icon: 'clock' },
+          { key: 'blocked', label: t('groupBlocked'), icon: 'alert', states: ['blocked', 'stale'] },
+          { key: 'done', label: t('groupDone'), icon: 'check' },
+        ];
+      }
+
+      function renderTaskGroups(tasks) {
+        boardContent.replaceChildren();
+        if (tasks.length === 0) {
+          renderEmpty();
+          return;
+        }
+
+        const groups = element('div', 'task-groups');
+        for (const definition of groupDefinitions()) {
+          const states = definition.states || [definition.key];
+          const items = tasks.filter((task) => states.includes(taskState(task)));
+          if (items.length === 0) {
+            continue;
+          }
+          const section = element('section', 'task-group');
+          const heading = element('div', 'group-heading');
+          heading.appendChild(createIcon(definition.icon));
+          heading.appendChild(element('h3', '', definition.label));
+          heading.appendChild(element('span', 'group-count', String(items.length)));
+          section.appendChild(heading);
+          const list = element('div', 'task-list');
+          items.forEach((task) => list.appendChild(renderTask(task)));
+          section.appendChild(list);
+          groups.appendChild(section);
+        }
+        boardContent.appendChild(groups);
+      }
+
+      function makeCommand(command) {
+        const box = element('div', 'command-box');
+        box.appendChild(element('code', '', command));
+        const button = element('button', 'copy-button');
+        button.type = 'button';
+        button.title = t('copy');
+        button.setAttribute('aria-label', t('copy'));
+        button.appendChild(createIcon('copy'));
+        button.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(command);
+            button.replaceChildren(createIcon('check'));
+            button.title = t('copied');
+            button.setAttribute('aria-label', t('copied'));
+          } catch {
+            button.focus();
+          }
+        });
+        box.appendChild(button);
+        return box;
+      }
+
+      function renderEmpty() {
+        const hasTasks = (state.data?.tasks || []).length > 0;
+        const wrap = element('div', 'empty-state');
+        const inner = element('div', 'empty-inner');
+        const icon = element('div', 'empty-icon');
+        icon.appendChild(createIcon(hasTasks ? 'search' : 'list'));
+        inner.appendChild(icon);
+        inner.appendChild(element('h3', '', hasTasks ? t('noMatch') : t('noTasks')));
+        inner.appendChild(element('p', '', hasTasks ? t('noMatchHint') : t('noTasksHint')));
+        if (hasTasks) {
+          const clear = element('button', 'button');
+          clear.type = 'button';
+          clear.style.marginTop = '14px';
+          clear.appendChild(createIcon('x'));
+          clear.appendChild(document.createTextNode(t('clearFilters')));
+          clear.addEventListener('click', clearFilters);
+          inner.appendChild(clear);
+        } else {
+          inner.appendChild(makeCommand('atb add --slug first-task --goal "..." --deliverable README.md'));
+          inner.appendChild(makeCommand('atb auto on'));
+        }
+        wrap.appendChild(inner);
+        boardContent.appendChild(wrap);
+      }
+
+      function renderLoading() {
+        boardContent.replaceChildren();
+        const wrap = element('div', 'loading-state');
+        const inner = element('div', 'loading-inner');
+        inner.appendChild(createIcon('loader', 'loading-icon'));
+        inner.appendChild(element('p', 'loading-text', t('loading')));
+        wrap.appendChild(inner);
+        boardContent.appendChild(wrap);
+      }
+
+      function renderError(message) {
+        errorRegion.replaceChildren();
+        const banner = element('div', 'error-banner');
+        banner.appendChild(element('span', '', `${t('loadError')} ${message}`));
+        const retry = element('button', 'button');
+        retry.type = 'button';
+        retry.appendChild(createIcon('refresh'));
+        retry.appendChild(document.createTextNode(t('retry')));
+        retry.addEventListener('click', loadBoard);
+        banner.appendChild(retry);
+        errorRegion.appendChild(banner);
+      }
+
+      function render() {
+        if (!state.data) {
+          return;
+        }
+        errorRegion.replaceChildren();
+        updateSummary();
+        refreshProjectOptions();
+        const tasks = filteredTasks();
+        $('resultCount').textContent = tasks.length === 1 ? t('oneTask') : t('taskCount', { count: tasks.length });
+        renderTaskGroups(tasks);
+      }
+
+      async function loadBoard() {
+        if (state.loading) {
+          return;
+        }
+        setLoading(true);
+        if (!state.data) {
+          renderLoading();
+        }
+        try {
+          const response = await fetch('/api/board', { cache: 'no-store' });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || `HTTP ${response.status}`);
+          }
+          state.data = payload;
+          render();
+        } catch (error) {
+          renderError(error instanceof Error ? error.message : String(error));
+          if (!state.data) {
+            boardContent.replaceChildren();
+          }
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      function clearFilters() {
+        state.filters = { query: '', status: 'all', origin: 'all', project: 'all' };
+        searchInput.value = '';
+        statusFilter.value = 'all';
+        originFilter.value = 'all';
+        projectFilter.value = 'all';
+        render();
+      }
+
+      function bindEvents() {
+        searchInput.addEventListener('input', () => {
+          state.filters.query = searchInput.value;
+          render();
+        });
+        statusFilter.addEventListener('change', () => {
+          state.filters.status = statusFilter.value;
+          render();
+        });
+        originFilter.addEventListener('change', () => {
+          state.filters.origin = originFilter.value;
+          render();
+        });
+        projectFilter.addEventListener('change', () => {
+          state.filters.project = projectFilter.value;
+          render();
+        });
+        clearButton.addEventListener('click', clearFilters);
+        refreshButton.addEventListener('click', loadBoard);
+        languageButton.addEventListener('click', () => {
+          state.lang = state.lang === 'zh' ? 'en' : 'zh';
+          storageSet('atb-board-language', state.lang);
+          applyStaticText();
+          render();
+        });
+        themeButton.addEventListener('click', () => {
+          state.theme = state.theme === 'dark' ? 'light' : 'dark';
+          storageSet('atb-board-theme', state.theme);
+          applyTheme();
+        });
+      }
+
+      function initialize() {
+        const storedLanguage = storageGet('atb-board-language');
+        state.lang = storedLanguage === 'zh' || storedLanguage === 'en'
+          ? storedLanguage
+          : (navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en';
+        const storedTheme = storageGet('atb-board-theme');
+        state.theme = storedTheme === 'dark' || storedTheme === 'light'
+          ? storedTheme
+          : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        applyStaticText();
+        applyTheme();
+        bindEvents();
+        loadBoard();
+      }
+
+      initialize();
+    })();
+  </script>
+</body>
+</html>
