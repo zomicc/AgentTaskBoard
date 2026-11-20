@@ -1,5 +1,7 @@
 # AgentTaskBoard
 
+[English](README.md) | [繁體中文](README.zh-TW.md)
+
 **AgentTaskBoard is a local task board and arbitration CLI for coding agents. The board is materialized by a single writer; it is not pushed in real time and it does not synchronize across machines.**
 
 One task has one owner. `atb claim` decides that owner with a machine-readable exit code, while `atb list --since` gives each agent a stable delta cursor for its next turn.

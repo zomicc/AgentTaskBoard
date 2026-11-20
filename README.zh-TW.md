@@ -1,5 +1,7 @@
 # AgentTaskBoard（Agent 任務看板）
 
+[English](README.md) | [繁體中文](README.zh-TW.md)
+
 **AgentTaskBoard（Agent 任務看板）是給程式代理使用的本機任務看板與裁決 CLI。看板由單一寫入者生成，不即時推送，也不進行跨機器同步。**
 
 一張任務只有一個 owner。`atb claim` 以可判定的退出碼決定 owner，而 `atb list --since` 為每個代理提供下一回合可用的穩定 delta 游標。
