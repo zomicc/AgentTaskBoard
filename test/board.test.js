@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const childProcess = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
@@ -199,6 +200,83 @@ test('board serves the UI and a read-only API without changing state files', asy
 
   assert.deepEqual(fileSnapshot(boardPath), before.board);
   assert.deepEqual(fileSnapshot(configPath), before.config);
+});
+
+function rawRequest(url, { method = 'GET', headers = {}, body } = {}) {
+  return new Promise((resolve, reject) => {
+    const target = new URL(url);
+    const request = http.request(
+      {
+        hostname: target.hostname,
+        port: target.port,
+        path: target.pathname,
+        method,
+        headers,
+      },
+      (response) => {
+        let data = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => {
+          data += chunk;
+        });
+        response.on('end', () => resolve({ status: response.statusCode, body: data }));
+      },
+    );
+    request.on('error', reject);
+    if (body !== undefined) {
+      request.write(body);
+    }
+    request.end();
+  });
+}
+
+test('board toggles auto mode only through the guarded endpoint', async () => {
+  const box = makeSandbox();
+  initBoard(box);
+  const boardPath = path.join(box.workspace, '.atb', 'board.json');
+  const configPath = path.join(box.workspace, '.atb', 'config.json');
+  const boardBefore = fileSnapshot(boardPath);
+  const server = await startBoard(box);
+
+  try {
+    const plain = await rawRequest(`${server.info.url}/api/auto`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled: true }),
+    });
+    assert.equal(plain.status, 415);
+
+    const foreign = await rawRequest(`${server.info.url}/api/auto`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'http://evil.example' },
+      body: JSON.stringify({ enabled: true }),
+    });
+    assert.equal(foreign.status, 403);
+
+    const on = await rawRequest(`${server.info.url}/api/auto`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: server.info.url },
+      body: JSON.stringify({ enabled: true }),
+    });
+    assert.equal(on.status, 200, on.body);
+    assert.equal(JSON.parse(on.body).auto.enabled, true);
+
+    const snapshot = await (await fetch(`${server.info.url}/api/board`)).json();
+    assert.equal(snapshot.auto.enabled, true);
+    assert.equal(typeof snapshot.auto.next_check_after, 'string');
+    assert.equal(JSON.parse(fs.readFileSync(configPath, 'utf8')).auto.enabled, true);
+
+    const off = await rawRequest(`${server.info.url}/api/auto`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: false }),
+    });
+    assert.equal(off.status, 200, off.body);
+    assert.equal(JSON.parse(off.body).auto.enabled, false);
+  } finally {
+    await stopBoard(server.child);
+  }
+
+  assert.deepEqual(fileSnapshot(boardPath), boardBefore);
 });
 
 test('board requires an initialized board and rejects an invalid port', () => {

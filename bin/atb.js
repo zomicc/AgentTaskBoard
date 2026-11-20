@@ -1851,9 +1851,94 @@ async function commandBoard(options, positionals) {
       'X-Content-Type-Options': 'nosniff',
     };
 
+    const sendJson = (status, body) => {
+      response.writeHead(status, { ...headers, 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(`${JSON.stringify(body)}\n`);
+    };
+
+    if (request.method === 'POST') {
+      if (request.url !== '/api/auto') {
+        sendJson(404, { ok: false, error: 'not found' });
+        return;
+      }
+      const contentType = String(request.headers['content-type'] || '').toLowerCase();
+      if (!contentType.startsWith('application/json')) {
+        sendJson(415, { ok: false, error: 'content-type must be application/json' });
+        return;
+      }
+      const origin = request.headers.origin;
+      if (origin) {
+        let sameOrigin = false;
+        try {
+          const parsedOrigin = new URL(origin);
+          sameOrigin = parsedOrigin.host === request.headers.host
+            && ['127.0.0.1', 'localhost', '[::1]'].includes(parsedOrigin.hostname);
+        } catch {
+          sameOrigin = false;
+        }
+        if (!sameOrigin) {
+          sendJson(403, { ok: false, error: 'cross-origin request refused' });
+          return;
+        }
+      }
+      let body = '';
+      let tooLarge = false;
+      request.setEncoding('utf8');
+      request.on('data', (chunk) => {
+        if (tooLarge) {
+          return;
+        }
+        body += chunk;
+        if (body.length > 1024) {
+          tooLarge = true;
+          body = '';
+        }
+      });
+      request.on('end', () => {
+        if (tooLarge) {
+          sendJson(413, { ok: false, error: 'request body too large' });
+          return;
+        }
+        let payload;
+        try {
+          payload = JSON.parse(body);
+        } catch {
+          sendJson(400, { ok: false, error: 'body must be JSON' });
+          return;
+        }
+        if (!payload || typeof payload !== 'object' || typeof payload.enabled !== 'boolean') {
+          sendJson(400, { ok: false, error: 'body must be {"enabled": true|false}' });
+          return;
+        }
+        try {
+          const next = withBoard(workspace, () => {
+            const config = readAutoConfig(paths.configPath);
+            config.auto.enabled = payload.enabled;
+            if (
+              Number.isInteger(payload.window_minutes)
+              && payload.window_minutes > 0
+              && payload.window_minutes <= 1440
+            ) {
+              config.auto.window_minutes = payload.window_minutes;
+            }
+            if (typeof payload.create_allowed === 'boolean') {
+              config.auto.create_allowed = payload.create_allowed;
+            }
+            config.auto.updated_ts = new Date().toISOString();
+            writeAutoConfig(paths.configPath, config);
+            return autoSnapshot(config);
+          });
+          sendJson(200, { ok: true, auto: next });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          sendJson(503, { ok: false, error: message });
+        }
+      });
+      return;
+    }
+
     if (request.method !== 'GET') {
-      response.writeHead(404, { ...headers, 'Content-Type': 'application/json; charset=utf-8' });
-      response.end(`${JSON.stringify({ ok: false, error: 'not found' })}\n`);
+      sendJson(404, { ok: false, error: 'not found' });
       return;
     }
 

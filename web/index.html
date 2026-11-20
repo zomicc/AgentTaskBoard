@@ -354,6 +354,50 @@
       color: var(--ink-faint);
     }
 
+    .auto-switch {
+      position: relative;
+      flex: 0 0 auto;
+      width: 34px;
+      height: 19px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--line);
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .auto-switch-knob {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: var(--surface);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+      transition: transform 0.15s ease;
+    }
+
+    .auto-switch[aria-checked="true"] {
+      background: var(--done);
+      border-color: var(--done);
+    }
+
+    .auto-switch[aria-checked="true"] .auto-switch-knob {
+      transform: translateX(15px);
+    }
+
+    .auto-switch:disabled {
+      opacity: 0.55;
+      cursor: progress;
+    }
+
+    .auto-switch:focus-visible {
+      outline: 2px solid var(--ink-soft);
+      outline-offset: 2px;
+    }
+
     .stats {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1091,6 +1135,9 @@
           <span id="autoLabel">Auto off</span>
           <span class="auto-divider" aria-hidden="true"></span>
           <span class="auto-next" id="autoNext">No scheduled check</span>
+          <button class="auto-switch" id="autoSwitch" type="button" role="switch" aria-checked="false" data-i18n-aria="autoSwitchAria">
+            <span class="auto-switch-knob" aria-hidden="true"></span>
+          </button>
         </div>
       </div>
 
@@ -1195,6 +1242,7 @@
           waiting: 'Waiting',
           autoOn: 'Auto on',
           autoOff: 'Auto off',
+          autoSwitchAria: 'Toggle auto mode',
           nextCheck: 'Next check {time}',
           noScheduledCheck: 'No scheduled check',
           taskSummary: 'Task summary',
@@ -1238,7 +1286,7 @@
           groupDone: 'Completed',
           copy: 'Copy',
           copied: 'Copied',
-          readOnly: 'Read-only local board',
+          readOnly: 'Local board · tasks read-only',
           generatedAt: 'Loaded {time}',
           refresh: 'Refresh',
           switchLanguage: 'Switch language',
@@ -1258,6 +1306,7 @@
           waiting: '等待中',
           autoOn: '自动模式已开',
           autoOff: '自动模式已关',
+          autoSwitchAria: '切换自动模式',
           nextCheck: '下次检查 {time}',
           noScheduledCheck: '暂无检查提示',
           taskSummary: '任务汇总',
@@ -1301,7 +1350,7 @@
           groupDone: '已完成',
           copy: '复制',
           copied: '已复制',
-          readOnly: '只读本地看板',
+          readOnly: '本地看板 · 任务只读',
           generatedAt: '加载于 {time}',
           refresh: '刷新',
           switchLanguage: '切换语言',
@@ -1352,6 +1401,7 @@
       const refreshButton = $('refreshButton');
       const languageButton = $('languageButton');
       const themeButton = $('themeButton');
+      const autoSwitch = $('autoSwitch');
       const clearButton = $('clearButton');
 
       function t(key, values = {}) {
@@ -1518,6 +1568,7 @@
         $('autoNext').textContent = auto?.enabled && auto.next_check_after
           ? t('nextCheck', { time: formatDate(auto.next_check_after) })
           : t('noScheduledCheck');
+        autoSwitch.setAttribute('aria-checked', String(Boolean(auto?.enabled)));
         $('generatedAt').textContent = state.data?.generated_at
           ? t('generatedAt', { time: formatDate(state.data.generated_at) })
           : '';
@@ -1822,6 +1873,27 @@
         });
         clearButton.addEventListener('click', clearFilters);
         refreshButton.addEventListener('click', loadBoard);
+        autoSwitch.addEventListener('click', async () => {
+          const enabled = autoSwitch.getAttribute('aria-checked') !== 'true';
+          autoSwitch.disabled = true;
+          try {
+            const response = await fetch('/api/auto', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ enabled }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              throw new Error(payload.error || `HTTP ${response.status}`);
+            }
+            await loadBoard();
+          } catch (error) {
+            autoSwitch.setAttribute('aria-checked', String(!enabled));
+            renderError(error instanceof Error ? error.message : String(error));
+          } finally {
+            autoSwitch.disabled = false;
+          }
+        });
         languageButton.addEventListener('click', () => {
           state.lang = state.lang === 'zh' ? 'en' : 'zh';
           storageSet('atb-board-language', state.lang);

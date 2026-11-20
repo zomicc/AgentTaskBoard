@@ -40,7 +40,7 @@ When enabled, `atb claim <slug> --actor <name> --goal "..."` creates an agent-or
 
 `atb board` serves a read-only page at `http://127.0.0.1:7788` and opens it in the default browser. Use `--no-open` to print the URL only, or `--port 0` to choose a free local port.
 
-The server binds only to `127.0.0.1`. It reads `.atb/board.json` and `.atb/config.json` on page load or refresh; it has no background timer and no write endpoint.
+The server binds only to `127.0.0.1`. It reads `.atb/board.json` and `.atb/config.json` on page load or refresh; it has no background timer. Tasks are read-only: the only write is `POST /api/auto`, which flips the auto-mode switch and is refused for cross-origin requests.
 
 ```sh
 atb board --port 7788 --no-open

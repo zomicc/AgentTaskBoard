@@ -40,7 +40,7 @@ atb --version
 
 `atb board` 会在 `http://127.0.0.1:7788` 提供只读页面，并尝试用默认浏览器打开。使用 `--no-open` 只打印地址，或使用 `--port 0` 自动选择本机空闲端口。
 
-服务只绑定 `127.0.0.1`。页面打开或刷新时才读取 `.atb/board.json` 与 `.atb/config.json`；没有后台定时器，也没有写入接口。
+服务只绑定 `127.0.0.1`。页面打开或刷新时才读取 `.atb/board.json` 与 `.atb/config.json`；没有后台定时器。任务数据只读：唯一的写入是 `POST /api/auto`，用来切换自动模式，跨站请求会被拒绝。
 
 ```sh
 atb board --port 7788 --no-open
