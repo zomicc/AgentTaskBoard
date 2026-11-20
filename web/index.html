@@ -1326,6 +1326,22 @@
         },
       };
 
+      // Plain-language Chinese for task goals. The board stores goals in English
+      // (agents write them); the Chinese view maps known slugs and falls back to
+      // the original text so an unmapped task is never blank.
+      const GOAL_ZH = {
+        'agent-task-board-v0.1-skeleton': '搭出 v0.1 的命令行骨架（init / add / claim / done / list）',
+        'add-doctor': '加一个自检命令，装完就能确认环境是否正常',
+        'rename-gavel-to-agenttaskboard': '把项目从 gavel 改名为 AgentTaskBoard，命令改成 atb',
+        'publish-public-repo': '把仓库公开到 GitHub，并确认线上能正常访问',
+        'wire-board-filters': '给看板加筛选：按状态、来源、项目、关键字',
+        'zcode-provider-config': '让 ZCode 在无界面模式下也能读到已选模型，正常回话',
+        'dsh-task-limit': '把 DSH 单次任务的字符上限从 10 万提上去，长对话不再被拒',
+        'readme-language-switch': '在手机尺寸下检查中英文切换按钮好不好用',
+        'board-ui-v0.1': '做出只读看板页面：概览数字、任务列表、筛选',
+        'npm-first-release': '把 agenttaskboard 发到 npm，让别人一条命令就能装',
+      };
+
       const $ = (id) => document.getElementById(id);
       const boardContent = $('boardContent');
       const errorRegion = $('errorRegion');
@@ -1348,6 +1364,17 @@
 
       function locale() {
         return state.lang === 'zh' ? 'zh-CN' : 'en';
+      }
+
+      function goalText(task) {
+        if (!task) {
+          return '';
+        }
+        const original = task.goal || '';
+        if (state.lang !== 'zh') {
+          return original;
+        }
+        return GOAL_ZH[task.slug] || original;
       }
 
       function storageGet(key) {
@@ -1534,6 +1561,7 @@
           return [
             task.slug,
             task.goal,
+            goalText(task),
             task.project,
             task.stage,
             task.owner,
@@ -1578,7 +1606,7 @@
         originBadge.appendChild(document.createTextNode(origin === 'agent' ? t('agent') : t('user')));
         top.appendChild(originBadge);
         main.appendChild(top);
-        main.appendChild(element('h4', '', task.goal || t('unknown')));
+        main.appendChild(element('h4', '', goalText(task) || t('unknown')));
 
         const meta = element('div', 'task-meta');
         if (task.project) {
