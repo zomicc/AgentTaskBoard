@@ -1,42 +1,42 @@
-# AgentTaskBoard（Agent 任務看板）
+# AgentTaskBoard（Agent 任务看板）
 
-[English](README.md) | [繁體中文](README.zh-TW.md)
+<a href="./README.md"><kbd>English</kbd></a> <a href="./README.zh-TW.md"><kbd>简体中文</kbd></a>
 
-**AgentTaskBoard（Agent 任務看板）是給程式代理使用的本機任務看板與裁決 CLI。看板由單一寫入者生成，不即時推送，也不進行跨機器同步。**
+**AgentTaskBoard（Agent 任务看板）是给程序代理使用的本地任务看板与裁决 CLI。看板由单一写入者生成，不实时推送，也不进行跨机器同步。**
 
-一張任務只有一個 owner。`atb claim` 以可判定的退出碼決定 owner，而 `atb list --since` 為每個代理提供下一回合可用的穩定 delta 游標。
+一张任务只有一个 owner。`atb claim` 以可判定的退出码决定 owner，而 `atb list --since` 为每个代理提供下一回合可用的稳定 delta 游标。
 
-## 狀態
+## 状态
 
-這個倉庫包含 `v0.1.0` 的 Node.js 骨架，實作 `init`、`doctor`、`rules`、`auto`、`add`、`claim`、`done`、`list`。它沒有 Web 面板、Obsidian 依賴、常駐程序、網路服務或跨機器同步。
+这个仓库包含 `v0.1.0` 的 Node.js 骨架，实现 `init`、`doctor`、`rules`、`auto`、`add`、`claim`、`done`、`list`。它没有 Web 面板、Obsidian 依赖、常驻进程、网络服务或跨机器同步。
 
 ## 需求
 
 - Node.js 20 或更新版本
-- 建議使用 Git 追蹤專案原始碼，並讓本機 `.atb/` 狀態留在版本控制之外
+- 建议使用 Git 跟踪项目源代码，并让本地 `.atb/` 状态留在版本控制之外
 
-## 安裝
+## 安装
 
 ```sh
 npm install -g .
 atb --version
 ```
 
-在專案中由 `atb init` 建立看板後，`atb doctor` 會在執行任務命令前檢查本機執行環境、工作區、看板、協定與鎖定狀態。
+在项目中由 `atb init` 创建看板后，`atb doctor` 会在执行任务命令前检查本地运行环境、工作区、看板、协议与锁定状态。
 
 ## 接入你的 agent
 
-`atb init` 不會修改 agent 規則檔。先執行 `atb rules install --dry-run` 查看每個目標檔案與行數變化，再執行 `atb rules install` 逐項確認。管線或其他非 TTY 環境會印出計畫並以 `7` 結束，不會等待輸入；確認後才使用 `--yes`。
+`atb init` 不会修改 agent 规则文件。先执行 `atb rules install --dry-run` 查看每个目标文件与行数变化，再执行 `atb rules install` 逐项确认。管道或其他非 TTY 环境会打印计划并以 `7` 结束，不会等待输入；确认后才使用 `--yes`。
 
-自動安裝器會先將每個檔案備份為 `<name>.bak-<timestamp>`，只替換 `atb:begin` 與 `atb:end` 之間的區塊，並把已安裝目標記錄在使用者資料目錄。用 `atb rules status` 檢查，`atb rules uninstall --yes` 移除。`atb doctor --rules` 會先確認看板存在；沒有 `--expect` 時印出挑戰並以 `7` 結束。向新的 agent 詢問規則探針 nonce，再執行 `atb doctor --rules --expect <agent-answer>`；相符時以 `0` 結束。
+自动安装器会先将每个文件备份为 `<name>.bak-<timestamp>`，只替换 `atb:begin` 与 `atb:end` 之间的区块，并把已安装目标记录在用户数据目录。用 `atb rules status` 检查，`atb rules uninstall --yes` 移除。`atb doctor --rules` 会先确认看板存在；没有 `--expect` 时打印挑战并以 `7` 结束。向新的 agent 询问规则探针 nonce，再执行 `atb doctor --rules --expect <agent-answer>`；相符时以 `0` 结束。
 
-## 自動模式
+## 自动模式
 
-自動模式是選擇性啟用且只屬於目前工作區。`atb init --auto` 或 `atb auto on` 啟用，`atb auto off` 停用，`atb auto status` 顯示 `enabled`、`window_minutes`、`create_allowed` 與 `next_check_after`。
-啟用後，`atb claim <slug> --actor <name> --goal "..."` 會在 slug 不存在時建立 agent 來源任務。自動模式關閉時，缺少任務會以 `4` 結束；開啟但沒給 goal 會以 `5` 結束；任務已存在時照常認領，並忽略這次傳入的 goal。`--no-create` 保留同步提示但停用認領時建卡。
-`--window` 只是下次檢查的提示，不是定時器：它只影響 `next_check_after`，並在下一次 `atb` 呼叫或代理回合邊界使用。範例：`atb auto on --window 5m`。
+自动模式是选择性启用且只属于当前工作区。`atb init --auto` 或 `atb auto on` 启用，`atb auto off` 停用，`atb auto status` 显示 `enabled`、`window_minutes`、`create_allowed` 与 `next_check_after`。
+启用后，`atb claim <slug> --actor <name> --goal "..."` 会在 slug 不存在时创建 agent 来源任务。自动模式关闭时，缺少任务会以 `4` 结束；开启但没给 goal 会以 `5` 结束；任务已存在时照常认领，并忽略这次传入的 goal。`--no-create` 保留同步提示但停用认领时建卡。
+`--window` 只是下次检查的提示，不是定时器：它只影响 `next_check_after`，并在下一次 `atb` 调用或代理回合边界使用。示例：`atb auto on --window 5m`。
 
-手動安裝使用同一個自門控區塊。將它加入你選擇的 agent 規則檔，並把 `<nonce>` 換成隨機唯一值：
+手动安装使用同一个自门控区块。将它加入你选择的 agent 规则文件，并把 `<nonce>` 换成随机唯一值：
 
 ```markdown
 <!-- atb:begin protocol:2 -->
@@ -54,83 +54,83 @@ AgentTaskBoard may track tasks in this project.
 <!-- atb:end -->
 ```
 
-手動目標是 `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.zcode/AGENTS.md`、`~/.agents/AGENTS.md` 與 `$DSH_HOME/AGENTS.md`。Claude Code 可透過專案 `CLAUDE.md` 的一行 `@AGENTS.md` 載入專案 `AGENTS.md`。
+手动目标是 `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.zcode/AGENTS.md`、`~/.agents/AGENTS.md` 与 `$DSH_HOME/AGENTS.md`。Claude Code 可通过项目 `CLAUDE.md` 的一行 `@AGENTS.md` 加载项目 `AGENTS.md`。
 
-開發時可直接執行 CLI：
+开发时可直接执行 CLI：
 
 ```sh
 node bin/atb.js --help
 ```
 
-## 快速開始
+## 快速开始
 
 ```sh
 mkdir demo
 cd demo
 atb init
 atb doctor
-atb add --slug first-task --project demo --goal "建立第一個任務" --deliverable "README.md" --stage design
+atb add --slug first-task --project demo --goal "建立第一个任务" --deliverable "README.md" --stage design
 atb claim first-task --actor builder
 atb list --since 0
 atb done first-task --actor builder --evidence-kind path --evidence-ref "."
 ```
 
-每個命令都接受 `--workspace <path>`，預設使用目前目錄。工作區根目錄存為 `workspace_ref`；`working_subdir` 保持相對路徑，讓任務定義仍然容易閱讀。
+每个命令都接受 `--workspace <path>`，默认使用当前目录。工作区根目录存为 `workspace_ref`；`working_subdir` 保持相对路径，让任务定义仍然容易阅读。
 
-## 任務模型
+## 任务模型
 
-| 欄位 | 意義 |
+| 字段 | 意义 |
 | --- | --- |
-| `id` | 任務的穩定 UUID |
-| `slug` | 方便人閱讀的唯一引用 |
-| `project` | 專案標籤 |
-| `goal` | 必填的預期成果描述 |
-| `workspace_ref` | 這個本機看板使用的專案根目錄 |
-| `working_subdir` | 相對於 `workspace_ref` 的選填任務目錄 |
-| `deliverables` | 必填的產物路徑或命令 |
-| `stage` | 自由文字階段，例如 `design`、`impl`、`verify` |
+| `id` | 任务的稳定 UUID |
+| `slug` | 方便人阅读的唯一引用 |
+| `project` | 项目标签 |
+| `goal` | 必填的预期成果描述 |
+| `workspace_ref` | 这个本地看板使用的项目根目录 |
+| `working_subdir` | 相对于 `workspace_ref` 的可选任务目录 |
+| `deliverables` | 必填的产物路径或命令 |
+| `stage` | 自由文本阶段，例如 `design`、`impl`、`verify` |
 | `status` | `todo`、`claimed` 或 `done` |
-| `owner` | 成功認領任務的 actor |
-| `outcome` | `atb done` 記錄的結果 |
-| `origin` | `atb add` 為 `user`，認領時自動建立為 `agent` |
-| `spec_revision` | 任務定義版本，從 `1` 開始 |
+| `owner` | 成功认领任务的 actor |
+| `outcome` | `atb done` 记录的结果 |
+| `origin` | `atb add` 为 `user`，认领时自动创建为 `agent` |
+| `spec_revision` | 任务定义版本，从 `1` 开始 |
 
 ## 命令
 
-| 命令 | 行為 |
+| 命令 | 行为 |
 | --- | --- |
-| `atb init` | 在工作區根目錄建立 `.atb/board.json`，可重複執行。 |
-| `atb doctor` | 檢查 Node.js、工作區可寫性、看板協定與殘留鎖定。 |
-| `atb rules install` | 預覽、逐項確認、備份並安裝自門控 agent 規則。 |
-| `atb rules status` | 顯示已安裝規則、協定、區塊雜湊與 nonce。 |
-| `atb rules uninstall` | 只移除管理的規則區塊並保留備份。 |
-| `atb doctor --rules` | 驗證看板與新的 agent 回傳的 nonce。 |
-| `atb auto` | 顯示或變更工作區層級的自動認領與同步提示。 |
-| `atb add` | 新增含目標、工作區引用、產物與階段的任務。 |
-| `atb claim` | 認領任務；自動模式可在提供 `--goal` 時建立任務。 |
-| `atb done` | 由 owner 完成已認領任務並記錄證據。 |
-| `atb list` | 顯示 `--since` 之後的任務與事件，可用 `--origin` 篩選。 |
+| `atb init` | 在工作区根目录创建 `.atb/board.json`，可重复执行。 |
+| `atb doctor` | 检查 Node.js、工作区可写性、看板协议与残留锁定。 |
+| `atb rules install` | 预览、逐项确认、备份并安装自门控 agent 规则。 |
+| `atb rules status` | 显示已安装规则、协议、区块哈希与 nonce。 |
+| `atb rules uninstall` | 只移除管理的规则区块并保留备份。 |
+| `atb doctor --rules` | 验证看板与新的 agent 返回的 nonce。 |
+| `atb auto` | 显示或变更工作区层级的自动认领与同步提示。 |
+| `atb add` | 新增含目标、工作区引用、产物与阶段的任务。 |
+| `atb claim` | 认领任务；自动模式可在提供 `--goal` 时创建任务。 |
+| `atb done` | 由 owner 完成已认领任务并记录证据。 |
+| `atb list` | 显示 `--since` 之后的任务与事件，可用 `--origin` 筛选。 |
 
-## 退出碼
+## 退出码
 
-| 退出碼 | 意義 |
+| 退出码 | 意义 |
 | --- | --- |
 | `0` | 成功 |
-| `3` | 認領衝突：任務已有其他 owner 或已完成 |
-| `4` | 找不到任務，或在 `init` 前查詢自動狀態 |
-| `5` | 命令或參數無效 |
-| `6` | 看板不存在、被鎖定或無法使用 |
-| `7` | 完成操作被拒，因為 actor 不是 owner |
-| `8` | 看板狀態損壞或協定版本不支援 |
-| `9` | 任務 slug 重複 |
-| `10` | 工作區或工作目錄不存在或不可寫 |
+| `3` | 认领冲突：任务已有其他 owner 或已完成 |
+| `4` | 找不到任务，或在 `init` 前查询自动状态 |
+| `5` | 命令或参数无效 |
+| `6` | 看板不存在、被锁定或无法使用 |
+| `7` | 完成操作被拒，因为 actor 不是 owner |
+| `8` | 看板状态损坏或协议版本不支持 |
+| `9` | 任务 slug 重复 |
+| `10` | 工作区或工作目录不存在或不可写 |
 
-內部設計筆記不放在公開倉庫。
+内部设计笔记不放在公开仓库。
 
-## 本機狀態
+## 本地状态
 
-執行期狀態位於 `<workspace>/.atb/`，倉庫的 `.gitignore` 已排除它。命令以 `.atb/lock` 序列化寫入；讀取使用最近一次落盤的看板快照。一致性口徑是單機寫入線性化，讀取在下一個命令或代理回合邊界最終可見。
+运行时状态位于 `<workspace>/.atb/`，仓库的 `.gitignore` 已排除它。命令以 `.atb/lock` 序列化写入；读取使用最近一次落盘的看板快照。一致性口径是单机写入线性化，读取在下一个命令或代理回合边界最终可见。
 
-## 授權
+## 授权
 
-MIT，見 [LICENSE](LICENSE)。
+MIT，见 [LICENSE](LICENSE)。

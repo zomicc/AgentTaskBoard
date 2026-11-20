@@ -1,6 +1,6 @@
 # AgentTaskBoard
 
-[English](README.md) | [繁體中文](README.zh-TW.md)
+<a href="./README.md"><kbd>English</kbd></a> <a href="./README.zh-TW.md"><kbd>简体中文</kbd></a>
 
 **AgentTaskBoard is a local task board and arbitration CLI for coding agents. The board is materialized by a single writer; it is not pushed in real time and it does not synchronize across machines.**
 
